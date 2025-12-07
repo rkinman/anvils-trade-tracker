@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { showSuccess, showError } from "@/utils/toast";
-import { Loader2, Save, Plus, ArrowLeft, Unlink, Search, Tag, Trash2, Settings, Eye, EyeOff, Calculator, Briefcase } from "lucide-react";
+import { Loader2, Save, Plus, ArrowLeft, Search, Tag, Trash2, ChevronDown, ChevronRight, Calculator, Briefcase, Link as LinkIcon } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -23,17 +23,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 interface Trade {
   id: string;
   date: string;
   symbol: string;
   action: string;
-  amount: number;
+  amount: number; // Total Cash Flow (Negative for Debit, Positive for Credit)
   tag_id: string | null;
   mark_price: number | null;
   quantity: number;
   multiplier: number;
+  price: number; // Unit Price
+  pair_id: string | null;
   unrealized_pnl: number | null;
 }
 
@@ -43,6 +46,20 @@ interface Tag {
   show_on_dashboard: boolean;
 }
 
+interface TradeGroup {
+  id: string; // pair_id or trade_id if single
+  isPair: boolean;
+  trades: Trade[];
+  summary: {
+    date: string;
+    symbol: string;
+    totalAmount: number; // Net Cost Basis (Realized Cash Flow)
+    totalMarketValue: number;
+    totalPnl: number;
+    isOpen: boolean;
+  };
+}
+
 export default function StrategyDetail() {
   const { strategyId } = useParams<{ strategyId: string }>();
   const queryClient = useQueryClient();
@@ -50,8 +67,8 @@ export default function StrategyDetail() {
   const [selectedUnassigned, setSelectedUnassigned] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [newTagName, setNewTagName] = useState("");
-  const [selectedAssigned, setSelectedAssigned] = useState<string[]>([]);
-
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  
   // --- QUERIES ---
   const { data: strategy, isLoading: strategyLoading } = useQuery({
     queryKey: ['strategy', strategyId],
@@ -88,7 +105,7 @@ export default function StrategyDetail() {
     queryKey: ['assignedTrades', strategyId],
     queryFn: async () => {
       const { data, error } = await supabase.from('trades')
-        .select('id, date, symbol, action, amount, tag_id, mark_price, quantity, multiplier, unrealized_pnl')
+        .select('*')
         .eq('strategy_id', strategyId!)
         .order('date', { ascending: false });
       if (error) throw error;
@@ -99,7 +116,7 @@ export default function StrategyDetail() {
   const { data: unassignedTrades } = useQuery<Trade[]>({
     queryKey: ['unassignedTrades'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('trades').select('id, date, symbol, action, amount, tag_id').is('strategy_id', null).order('date', { ascending: false });
+      const { data, error } = await supabase.from('trades').select('*').is('strategy_id', null).order('date', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -164,16 +181,6 @@ export default function StrategyDetail() {
     onError: (err) => showError(err.message)
   });
 
-  const updateTradeTagMutation = useMutation({
-    mutationFn: ({ tradeIds, tagId }: { tradeIds: string[], tagId: string | null }) => supabase.from('trades').update({ tag_id: tagId }).in('id', tradeIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
-      showSuccess("Trade(s) updated.");
-      setSelectedAssigned([]);
-    },
-    onError: (err) => showError(err.message)
-  });
-
   // --- HANDLERS ---
   const handleSave = () => updateStrategyMutation.mutate(formState);
   const handleAddSelected = () => assignTradesMutation.mutate(selectedUnassigned);
@@ -181,27 +188,119 @@ export default function StrategyDetail() {
     if (newTagName.trim()) createTagMutation.mutate(newTagName.trim());
   };
 
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
   const filteredUnassignedTrades = useMemo(() => unassignedTrades?.filter(t => t.symbol.toLowerCase().includes(searchTerm.toLowerCase())), [unassignedTrades, searchTerm]);
-  
-  const openPositions = useMemo(() => {
-    return assignedTrades?.filter(t => t.mark_price !== null) || [];
+
+  // --- DATA PROCESSING (Grouping) ---
+  const groupedTrades = useMemo<TradeGroup[]>(() => {
+    if (!assignedTrades) return [];
+
+    const groups: Record<string, TradeGroup> = {};
+
+    assignedTrades.forEach(trade => {
+      // Use pair_id as group key if exists, otherwise trade.id
+      const groupId = trade.pair_id || trade.id;
+      const isPair = !!trade.pair_id;
+
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          id: groupId,
+          isPair,
+          trades: [],
+          summary: {
+            date: trade.date,
+            symbol: trade.symbol, // Will refine later
+            totalAmount: 0,
+            totalMarketValue: 0,
+            totalPnl: 0,
+            isOpen: false
+          }
+        };
+      }
+
+      groups[groupId].trades.push(trade);
+    });
+
+    // Calculate Summary stats for each group
+    return Object.values(groups).map(group => {
+      let totalAmount = 0;
+      let totalMarketValue = 0;
+      let totalPnl = 0;
+      let isOpen = false;
+      let symbols = new Set<string>();
+
+      group.trades.forEach(trade => {
+        symbols.add(trade.symbol);
+        totalAmount += trade.amount;
+
+        // --- P&L CALCULATION LOGIC ---
+        // 1. Determine if Long or Short
+        let sign = 1; // Default to Long
+        const actionUpper = trade.action.toUpperCase();
+        if (actionUpper.includes('SELL') || actionUpper.includes('SHORT')) {
+          sign = -1; // Short
+        }
+
+        // 2. Check if Open (has mark_price)
+        if (trade.mark_price !== null) {
+          isOpen = true;
+          // Market Value = Mark * Qty * Multiplier * Sign
+          // Note: Short MV is negative (liability), Long MV is positive (asset)
+          // Actually, for Net Liq purposes: 
+          // Long Call Value = $500.
+          // Short Call Cost to Close = $500. Net Liq Impact = -$500.
+          // So:
+          // Long MV = Mark * Qty * Mult (+ve)
+          // Short MV = Mark * Qty * Mult * -1 (-ve)
+          const mv = (trade.mark_price || 0) * trade.quantity * trade.multiplier * sign;
+          
+          totalMarketValue += mv;
+          
+          // P&L = MV + Cost Basis (Amount)
+          // Example Long: Cost -500. MV +600. P&L = +100.
+          // Example Short: Credit +500. MV -100. P&L = +400.
+          totalPnl += (mv + trade.amount);
+        } else {
+          // Closed trade. P&L is just the realized amount.
+          // (assuming closed trades have no residual market value)
+          totalPnl += trade.amount;
+        }
+      });
+
+      // Refine Symbol Summary
+      const symbolList = Array.from(symbols);
+      const displaySymbol = symbolList.length === 1 
+        ? symbolList[0] 
+        : group.isPair 
+          ? `${symbolList[0]} + ${symbolList.length - 1} legs` 
+          : symbolList[0];
+
+      // Use the earliest date for the group
+      group.trades.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const displayDate = group.trades[0]?.date;
+
+      return {
+        ...group,
+        summary: {
+          date: displayDate,
+          symbol: displaySymbol,
+          totalAmount,
+          totalMarketValue,
+          totalPnl,
+          isOpen
+        }
+      };
+    }).sort((a, b) => new Date(b.summary.date).getTime() - new Date(a.summary.date).getTime());
   }, [assignedTrades]);
 
-  const groupedAssignedTrades = useMemo(() => {
-    if (!assignedTrades) return {};
-    const groups: Record<string, Trade[]> = { 'untagged': [] };
-    tags?.forEach(tag => groups[tag.id] = []);
-    
-    assignedTrades.forEach(trade => {
-      const key = trade.tag_id || 'untagged';
-      if (groups[key]) {
-        groups[key].push(trade);
-      } else {
-        groups['untagged'].push(trade);
-      }
-    });
-    return groups;
-  }, [assignedTrades, tags]);
 
   if (strategyLoading) return <DashboardLayout><Loader2 className="h-8 w-8 animate-spin mx-auto mt-10" /></DashboardLayout>;
 
@@ -216,6 +315,7 @@ export default function StrategyDetail() {
         </div>
         
         <div className="grid gap-6 lg:grid-cols-3">
+          {/* Strategy Info Card */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader><CardTitle>Strategy Details</CardTitle></CardHeader>
@@ -233,12 +333,10 @@ export default function StrategyDetail() {
                     </div>
                   </div>
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" value={formState.description} onChange={(e) => setFormState({ ...formState, description: e.target.value })} />
                 </div>
-                
                 <div className="flex items-center space-x-2">
                   <Switch 
                     id="status" 
@@ -254,64 +352,9 @@ export default function StrategyDetail() {
                 </Button>
               </CardFooter>
             </Card>
-
-            {/* OPEN POSITIONS CARD */}
-            {openPositions.length > 0 && (
-              <Card className="border-l-4 border-l-blue-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Briefcase className="h-5 w-5 text-blue-500" /> 
-                    Open Positions
-                  </CardTitle>
-                  <CardDescription>Active trades currently held in this strategy.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="border rounded-md overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Symbol</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">Entry Price</TableHead>
-                          <TableHead className="text-right">Mark</TableHead>
-                          <TableHead className="text-right">Open P&L</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {openPositions.map(pos => {
-                          const entryPrice = Math.abs(pos.amount / (pos.quantity * pos.multiplier));
-                          
-                          // Determine sign manually
-                          let sign = 1;
-                          const actionUpper = pos.action.toUpperCase();
-                          if (actionUpper.includes('SELL') || actionUpper.includes('SHORT')) {
-                            sign = -1;
-                          }
-
-                          // Calculate P&L manually
-                          const mv = (pos.mark_price || 0) * (pos.quantity || 0) * (pos.multiplier || 100) * sign;
-                          const pnl = mv + pos.amount;
-
-                          return (
-                            <TableRow key={pos.id}>
-                              <TableCell className="font-mono">{pos.symbol}</TableCell>
-                              <TableCell className="text-right">{pos.quantity}</TableCell>
-                              <TableCell className="text-right">${entryPrice.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">${pos.mark_price?.toFixed(2)}</TableCell>
-                              <TableCell className={`text-right font-bold ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                {pnl > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(pnl)}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
           
+          {/* Tags Card */}
           <Card className="flex flex-col">
             <CardHeader>
               <CardTitle>Tags & KPIs</CardTitle>
@@ -345,29 +388,21 @@ export default function StrategyDetail() {
                     </div>
                   </div>
                 ))}
-                {tags?.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    No tags yet. Create one to organize trades.
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* TRADES / POSITIONS TABLE */}
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <div><CardTitle>Assigned Trades</CardTitle><CardDescription>Trades in this strategy, grouped by tag.</CardDescription></div>
+            <div>
+              <CardTitle>Trades & Positions</CardTitle>
+              <CardDescription>
+                Grouped by pair. Expand to see leg details and P&L.
+              </CardDescription>
+            </div>
             <div className="flex gap-2">
-              {selectedAssigned.length > 0 && (
-                <Select onValueChange={(tagId) => updateTradeTagMutation.mutate({ tradeIds: selectedAssigned, tagId: tagId === 'none' ? null : tagId })}>
-                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Assign Tag..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Untag</SelectItem>
-                    {tags?.map(tag => <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
               <Dialog open={isAddTradesOpen} onOpenChange={setIsAddTradesOpen}>
                 <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Add Trades</Button></DialogTrigger>
                 <DialogContent className="max-w-3xl">
@@ -404,7 +439,6 @@ export default function StrategyDetail() {
                                 <TableCell className="text-right">${trade.amount}</TableCell>
                               </TableRow>
                             ))}
-                            {filteredUnassignedTrades?.length === 0 && <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">No unassigned trades found.</TableCell></TableRow>}
                           </TableBody>
                         </Table>
                      </div>
@@ -421,41 +455,124 @@ export default function StrategyDetail() {
           </CardHeader>
           <CardContent>
             {assignedTradesLoading ? <Loader2 className="h-6 w-6 animate-spin mx-auto mt-10" /> : (
-              <div className="space-y-6">
-                {Object.entries(groupedAssignedTrades).map(([tagId, trades]) => {
-                  if (trades.length === 0) return null;
-                  const tagName = tagId === 'untagged' ? 'Untagged' : tags?.find(t => t.id === tagId)?.name;
-                  return (
-                    <div key={tagId}>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        {tagId !== 'untagged' && <Tag className="h-4 w-4 text-muted-foreground" />}
-                        {tagName} 
-                        <Badge variant="secondary" className="ml-2 text-xs">{trades.length}</Badge>
-                      </h4>
-                      <div className="border rounded-md overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-12"><Checkbox onCheckedChange={(checked) => setSelectedAssigned(p => checked ? [...p, ...trades.map(t => t.id)] : p.filter(id => !trades.map(t => t.id).includes(id)))} /></TableHead>
-                              <TableHead>Date</TableHead><TableHead>Symbol</TableHead><TableHead>Action</TableHead><TableHead className="text-right">Amount</TableHead>
+              <div className="border rounded-md overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Structure / Symbol</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Cost Basis</TableHead>
+                      <TableHead className="text-right">Current Value</TableHead>
+                      <TableHead className="text-right">Net P&L</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedTrades.map(group => {
+                      const isExpanded = expandedGroups.has(group.id);
+                      return (
+                        <Fragment key={group.id}>
+                          {/* GROUP ROW */}
+                          <TableRow 
+                            className={cn(
+                              "cursor-pointer hover:bg-muted/30 transition-colors", 
+                              isExpanded && "bg-muted/20 border-b-0"
+                            )}
+                            onClick={() => toggleGroup(group.id)}
+                          >
+                            <TableCell className="text-center">
+                              {group.isPair ? (
+                                isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                              ) : (
+                                <div className="w-4" /> // Spacer for single trades
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">{format(new Date(group.summary.date), 'MMM d, yyyy')}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">{group.summary.symbol}</span>
+                                {group.isPair && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {group.summary.isOpen ? 
+                                <Badge variant="default" className="bg-green-600 hover:bg-green-700">Open</Badge> : 
+                                <Badge variant="secondary">Closed</Badge>
+                              }
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalAmount)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                                {group.summary.isOpen ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalMarketValue) : '-'}
+                            </TableCell>
+                            <TableCell className={cn("text-right font-bold", group.summary.totalPnl >= 0 ? "text-green-500" : "text-red-500")}>
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalPnl)}
+                            </TableCell>
+                          </TableRow>
+
+                          {/* LEGS / EXPANDED ROW */}
+                          {/* Only expand if paired or if single trade is open (to see stats) - actually logic below expands everything if clicked */}
+                          {isExpanded && (
+                            <TableRow className="bg-muted/5 hover:bg-muted/5">
+                              <TableCell colSpan={7} className="p-0">
+                                <div className="border-t border-b bg-muted/10 py-2">
+                                  <Table>
+                                    <TableHeader>
+                                        <TableRow className="border-none">
+                                            <TableHead className="pl-12 text-xs">Leg Date</TableHead>
+                                            <TableHead className="text-xs">Leg Action</TableHead>
+                                            <TableHead className="text-xs">Symbol</TableHead>
+                                            <TableHead className="text-xs text-right">Entry Price</TableHead>
+                                            <TableHead className="text-xs text-right">Mark Price</TableHead>
+                                            <TableHead className="text-xs text-right">Leg P&L</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {group.trades.map(trade => {
+                                            // Leg P&L Calc
+                                            let sign = 1;
+                                            if (trade.action.toUpperCase().includes('SELL') || trade.action.toUpperCase().includes('SHORT')) sign = -1;
+                                            const mv = (trade.mark_price || 0) * trade.quantity * trade.multiplier * sign;
+                                            const legPnl = (trade.mark_price !== null) ? (mv + trade.amount) : trade.amount;
+                                            const entryPrice = Math.abs(trade.amount / (trade.quantity * trade.multiplier));
+                                            
+                                            return (
+                                                <TableRow key={trade.id} className="border-none hover:bg-transparent">
+                                                    <TableCell className="pl-12 text-xs text-muted-foreground">{format(new Date(trade.date), 'MM/dd/yy')}</TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <span className={trade.action.includes('BUY') ? "text-red-500" : "text-green-500"}>{trade.action}</span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs font-mono">{trade.symbol}</TableCell>
+                                                    <TableCell className="text-xs text-right font-mono">${entryPrice.toFixed(2)}</TableCell>
+                                                    <TableCell className="text-xs text-right font-mono">
+                                                        {trade.mark_price ? `$${trade.mark_price.toFixed(2)}` : '-'}
+                                                    </TableCell>
+                                                    <TableCell className={cn("text-xs text-right font-bold", legPnl >= 0 ? "text-green-600/70" : "text-red-600/70")}>
+                                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(legPnl)}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {trades.map(trade => (
-                              <TableRow key={trade.id} data-state={selectedAssigned.includes(trade.id) && "selected"}>
-                                <TableCell><Checkbox checked={selectedAssigned.includes(trade.id)} onCheckedChange={(checked) => setSelectedAssigned(p => checked ? [...p, trade.id] : p.filter(id => id !== trade.id))} /></TableCell>
-                                <TableCell>{format(new Date(trade.date), 'MMM d, yyyy')}</TableCell>
-                                <TableCell><Badge variant="outline" className="font-mono">{trade.symbol}</Badge></TableCell>
-                                <TableCell>{trade.action}</TableCell>
-                                <TableCell className={`text-right font-bold ${trade.amount >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(trade.amount)}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  );
-                })}
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                    {groupedTrades.length === 0 && (
+                        <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                No trades assigned to this strategy yet.
+                            </TableCell>
+                        </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>

@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown, Tag, EyeOff, Eye } from "lucide-react";
+import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown, Tag, EyeOff, Eye, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { showSuccess, showError } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,6 +36,16 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Define Trade type based on Supabase schema
 interface Trade {
@@ -117,6 +127,7 @@ export default function TradeHistory() {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showHidden, setShowHidden] = useState(false);
+  const [tradesToDelete, setTradesToDelete] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   // Fetch Trades
@@ -221,6 +232,23 @@ export default function TradeHistory() {
     onError: (err) => { showError(err.message); }
   });
 
+  const deleteTradesMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from('trades').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: (data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['trades', 'dashboard-stats', 'strategies'] });
+      showSuccess(`Successfully deleted ${ids.length} trade(s).`);
+      setSelectedTrades(prev => prev.filter(id => !ids.includes(id)));
+      setTradesToDelete([]);
+    },
+    onError: (err) => {
+      showError(err.message);
+      setTradesToDelete([]);
+    }
+  });
+
   // --- Handlers ---
   const handleStrategyChange = (tradeId: string, value: string) => {
     updateStrategyMutation.mutate({ tradeId, strategyId: value === "none" ? null : value });
@@ -249,6 +277,7 @@ export default function TradeHistory() {
   const handleBulkUnpair = () => unpairTradesMutation.mutate(selectedTrades);
   const handleBulkHide = () => updateHiddenStatusMutation.mutate({ ids: selectedTrades, hidden: true });
   const handleBulkUnhide = () => updateHiddenStatusMutation.mutate({ ids: selectedTrades, hidden: false });
+  const handleConfirmDelete = () => deleteTradesMutation.mutate(tradesToDelete);
   
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -332,6 +361,27 @@ export default function TradeHistory() {
 
   return (
     <DashboardLayout>
+      <AlertDialog open={tradesToDelete.length > 0} onOpenChange={(open) => !open && setTradesToDelete([])}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete {tradesToDelete.length} trade(s) from the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleteTradesMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteTradesMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -402,6 +452,10 @@ export default function TradeHistory() {
                     </Select>
                   </div>
                 </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setTradesToDelete(selectedTrades)} className="text-destructive focus:text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete Selected
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -439,6 +493,7 @@ export default function TradeHistory() {
                           <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Amount</SortableTableHead>
                           <SortableTableHead sortKey="strategy_name" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Strategy</SortableTableHead>
                           <SortableTableHead sortKey="pair_id" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Pair ID</SortableTableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -463,6 +518,11 @@ export default function TradeHistory() {
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate">
                               {trade.pair_id ? (<Badge variant="secondary" className="font-mono">{trade.pair_id.substring(0, 8)}...</Badge>) : "N/A"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setTradesToDelete([trade.id])}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}

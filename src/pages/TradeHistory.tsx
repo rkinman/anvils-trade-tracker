@@ -97,6 +97,15 @@ const SortableTableHead: React.FC<SortableTableHeadProps> = ({
   );
 };
 
+// Helper function for currency formatting
+const formatCurrency = (value: number, decimals: number = 2) => {
+  return new Intl.NumberFormat('en-US', { 
+    style: 'currency', 
+    currency: 'USD',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+};
 
 export default function TradeHistory() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -139,15 +148,9 @@ export default function TradeHistory() {
   });
 
   // --- Mutations ---
-
-  // Mutation to update strategy for a single trade
   const updateStrategyMutation = useMutation({
     mutationFn: async ({ tradeId, strategyId }: { tradeId: string, strategyId: string | null }) => {
-      const { error } = await supabase
-        .from('trades')
-        .update({ strategy_id: strategyId })
-        .eq('id', tradeId);
-      
+      const { error } = await supabase.from('trades').update({ strategy_id: strategyId }).eq('id', tradeId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -155,225 +158,134 @@ export default function TradeHistory() {
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
       showSuccess("Trade updated");
     },
-    onError: (err) => {
-      showError(err.message);
-    }
+    onError: (err) => { showError(err.message); }
   });
 
-  // Mutation to update strategy for multiple trades
   const bulkUpdateStrategyMutation = useMutation({
     mutationFn: async (strategyId: string | null) => {
-      if (selectedTrades.length === 0) {
-        throw new Error("No trades selected for bulk update.");
-      }
-      
-      const { error } = await supabase
-        .from('trades')
-        .update({ strategy_id: strategyId })
-        .in('id', selectedTrades);
-
+      if (selectedTrades.length === 0) throw new Error("No trades selected.");
+      const { error } = await supabase.from('trades').update({ strategy_id: strategyId }).in('id', selectedTrades);
       if (error) throw error;
     },
     onSuccess: (data, strategyId) => {
       queryClient.invalidateQueries({ queryKey: ['trades'] });
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
-      setSelectedTrades([]);
       const strategyName = strategies?.find(s => s.id === strategyId)?.name || 'Unassigned';
-      showSuccess(`Successfully assigned ${selectedTrades.length} trades to "${strategyName}".`);
+      showSuccess(`Assigned ${selectedTrades.length} trades to "${strategyName}".`);
+      setSelectedTrades([]);
     },
-    onError: (err) => {
-      showError(err.message);
-    }
+    onError: (err) => { showError(err.message); }
   });
 
-  // Mutation for pairing trades
   const pairTradesMutation = useMutation({
     mutationFn: async (tradeIds: string[]) => {
-      if (tradeIds.length < 2) {
-        throw new Error("Select at least two trades to pair.");
-      }
-      
-      // Generate a new UUID for the pair
+      if (tradeIds.length < 2) throw new Error("Select at least two trades.");
       const pairId = crypto.randomUUID();
-
-      const { error } = await supabase
-        .from('trades')
-        .update({ pair_id: pairId })
-        .in('id', tradeIds);
-
+      const { error } = await supabase.from('trades').update({ pair_id: pairId }).in('id', tradeIds);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trades'] });
+      showSuccess(`Paired ${selectedTrades.length} trades.`);
       setSelectedTrades([]);
-      showSuccess(`Successfully paired ${selectedTrades.length} trades.`);
     },
-    onError: (err) => {
-      showError(err.message);
-    }
+    onError: (err) => { showError(err.message); }
   });
 
-  // Mutation for unpairing trades
   const unpairTradesMutation = useMutation({
     mutationFn: async (tradeIds: string[]) => {
-      const { error } = await supabase
-        .from('trades')
-        .update({ pair_id: null })
-        .in('id', tradeIds);
-
+      const { error } = await supabase.from('trades').update({ pair_id: null }).in('id', tradeIds);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trades'] });
+      showSuccess(`Unpaired ${selectedTrades.length} trades.`);
       setSelectedTrades([]);
-      showSuccess(`Successfully unpaired ${selectedTrades.length} trades.`);
     },
-    onError: (err) => {
-      showError(err.message);
-    }
+    onError: (err) => { showError(err.message); }
   });
 
   // --- Handlers ---
-
   const handleStrategyChange = (tradeId: string, value: string) => {
-    const strategyId = value === "none" ? null : value;
-    updateStrategyMutation.mutate({ tradeId, strategyId });
+    updateStrategyMutation.mutate({ tradeId, strategyId: value === "none" ? null : value });
   };
 
   const handleBulkStrategyChange = (strategyId: string) => {
-    const id = strategyId === "none" ? null : strategyId;
-    bulkUpdateStrategyMutation.mutate(id);
+    bulkUpdateStrategyMutation.mutate(strategyId === "none" ? null : strategyId);
   };
 
   const handleSelectTrade = (tradeId: string, checked: boolean) => {
-    setSelectedTrades(prev => 
-      checked ? [...prev, tradeId] : prev.filter(id => id !== tradeId)
-    );
+    setSelectedTrades(prev => checked ? [...prev, tradeId] : prev.filter(id => id !== tradeId));
   };
 
   const handleSelectAll = (checked: boolean) => {
-    if (!filteredTrades) return;
-    if (checked) {
-      setSelectedTrades(filteredTrades.map(t => t.id));
-    } else {
-      setSelectedTrades([]);
-    }
+    setSelectedTrades(checked && filteredTrades ? filteredTrades.map(t => t.id) : []);
   };
 
-  const handleBulkPair = () => {
-    if (selectedTrades.length < 2) {
-      showError("Please select at least two trades to pair.");
-      return;
-    }
-    pairTradesMutation.mutate(selectedTrades);
-  };
-
-  const handleBulkUnpair = () => {
-    if (selectedTrades.length === 0) return;
-    unpairTradesMutation.mutate(selectedTrades);
-  };
+  const handleBulkPair = () => pairTradesMutation.mutate(selectedTrades);
+  const handleBulkUnpair = () => unpairTradesMutation.mutate(selectedTrades);
   
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortKey(key);
-      setSortDirection('desc'); // Default to descending for new sort key
+      setSortDirection('desc');
     }
   };
 
-  // --- Filtering ---
+  // --- Memoized Data ---
+  const filteredTrades = useMemo(() => 
+    trades?.filter(trade => 
+      trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      trade.action.toLowerCase().includes(searchTerm.toLowerCase())
+    ), [trades, searchTerm]);
 
-  const filteredTrades = trades?.filter(trade => 
-    trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    trade.action.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // --- Sorting Logic ---
   const sortedTrades = useMemo(() => {
     if (!filteredTrades) return [];
+    return [...filteredTrades].sort((a, b) => {
+      let aValue: any = a[sortKey as keyof Trade];
+      let bValue: any = b[sortKey as keyof Trade];
 
-    const sorted = [...filteredTrades].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortKey) {
-        case 'date':
-          aValue = new Date(a.date).getTime();
-          bValue = new Date(b.date).getTime();
-          break;
-        case 'symbol':
-        case 'action':
-        case 'pair_id':
-          aValue = a[sortKey] || '';
-          bValue = b[sortKey] || '';
-          break;
-        case 'strategy_name':
-          aValue = a.strategies?.name || '';
-          bValue = b.strategies?.name || '';
-          break;
-        case 'quantity':
-        case 'price':
-        case 'amount':
-          aValue = Number(a[sortKey]);
-          bValue = Number(b[sortKey]);
-          break;
-        default:
-          return 0;
+      if (sortKey === 'date') {
+        aValue = new Date(a.date).getTime();
+        bValue = new Date(b.date).getTime();
+      } else if (sortKey === 'strategy_name') {
+        aValue = a.strategies?.name || '';
+        bValue = b.strategies?.name || '';
       }
-
+      
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-
-    return sorted;
   }, [filteredTrades, sortKey, sortDirection]);
 
-  // --- Grouping Logic ---
   const groupedTrades = useMemo(() => {
     if (!sortedTrades) return {};
-
-    const groups: Record<string, { name: string; trades: Trade[] }> = {};
-
-    for (const trade of sortedTrades) {
+    const groups = sortedTrades.reduce((acc, trade) => {
       const strategyId = trade.strategy_id || 'unassigned';
       const strategyName = trade.strategies?.name || 'Unassigned Trades';
-
-      if (!groups[strategyId]) {
-        groups[strategyId] = { name: strategyName, trades: [] };
+      if (!acc[strategyId]) {
+        acc[strategyId] = { name: strategyName, trades: [] };
       }
-      groups[strategyId].trades.push(trade);
-    }
+      acc[strategyId].trades.push(trade);
+      return acc;
+    }, {} as Record<string, { name: string; trades: Trade[] }>);
 
-    // Order the groups: 'unassigned' first, then by strategy name
     const orderedKeys = Object.keys(groups).sort((a, b) => {
       if (a === 'unassigned') return -1;
       if (b === 'unassigned') return 1;
       return groups[a].name.localeCompare(groups[b].name);
     });
 
-    const orderedGroups: Record<string, { name: string; trades: Trade[] }> = {};
-    for (const key of orderedKeys) {
-      orderedGroups[key] = groups[key];
-    }
-
-    return orderedGroups;
+    return orderedKeys.reduce((acc, key) => {
+      acc[key] = groups[key];
+      return acc;
+    }, {} as Record<string, { name: string; trades: Trade[] }>);
   }, [sortedTrades]);
 
-
   const allSelected = filteredTrades && selectedTrades.length > 0 && selectedTrades.length === filteredTrades.length;
-  // const indeterminate = selectedTrades.length > 0 && selectedTrades.length < (filteredTrades?.length || 0); // Not used
-
-  // Helper function for currency formatting
-  const formatCurrency = (value: number, decimals: number = 2) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD',
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    }).format(value);
-  };
 
   return (
     <DashboardLayout>
@@ -405,40 +317,27 @@ export default function TradeHistory() {
               <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Pairing</DropdownMenuLabel>
-                  <DropdownMenuItem 
-                    onClick={handleBulkPair} 
-                    disabled={pairTradesMutation.isPending}
-                  >
-                    <LinkIcon className="mr-2 h-4 w-4" /> Pair Selected Trades
+                  <DropdownMenuItem onClick={handleBulkPair} disabled={pairTradesMutation.isPending}>
+                    <LinkIcon className="mr-2 h-4 w-4" /> Pair Selected
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={handleBulkUnpair} 
-                    disabled={unpairTradesMutation.isPending}
-                  >
-                    <Unlink className="mr-2 h-4 w-4" /> Unpair Selected Trades
+                  <DropdownMenuItem onClick={handleBulkUnpair} disabled={unpairTradesMutation.isPending}>
+                    <Unlink className="mr-2 h-4 w-4" /> Unpair Selected
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
-
                 <DropdownMenuSeparator />
-
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Assign Strategy</DropdownMenuLabel>
                   <div className="p-2">
-                    <Select 
-                      onValueChange={handleBulkStrategyChange}
-                      disabled={bulkUpdateStrategyMutation.isPending || !strategies || strategies.length === 0}
-                    >
+                    <Select onValueChange={handleBulkStrategyChange} disabled={bulkUpdateStrategyMutation.isPending || !strategies}>
                       <SelectTrigger className="w-full h-8">
                         <SelectValue placeholder="Select Strategy" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none" className="text-muted-foreground">
-                          <Tag className="mr-2 h-4 w-4 inline-block" /> Unassign Strategy
+                          <Tag className="mr-2 h-4 w-4 inline-block" /> Unassign
                         </SelectItem>
                         {strategies?.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -454,165 +353,51 @@ export default function TradeHistory() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[40px]">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all"
-                    className="translate-y-[2px]"
-                  />
+                  <Checkbox checked={allSelected} onCheckedChange={handleSelectAll} aria-label="Select all" />
                 </TableHead>
-                <SortableTableHead 
-                  sortKey="date" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                >
-                  Date
-                </SortableTableHead>
-                <SortableTableHead 
-                  sortKey="symbol" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                >
-                  Symbol
-                </SortableTableHead>
-                <SortableTableHead 
-                  sortKey="action" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                >
-                  Action
-                </SortableTableHead>
-                <SortableTableHead 
-                  sortKey="quantity" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                  className="text-right"
-                >
-                  Qty
-                </SortableTableHead>
-                <SortableTableHead 
-                  sortKey="price" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                  className="text-right"
-                >
-                  Price
-                </TableHead>
-                <SortableTableHead 
-                  sortKey="amount" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                  className="text-right"
-                >
-                  Amount
-                </TableHead>
-                <SortableTableHead 
-                  sortKey="strategy_name" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                >
-                  Strategy
-                </SortableTableHead>
-                <SortableTableHead 
-                  sortKey="pair_id" 
-                  currentSortKey={sortKey} 
-                  currentSortDirection={sortDirection} 
-                  onSort={handleSort}
-                >
-                  Pair ID
-                </TableHead>
+                <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
+                <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Symbol</SortableTableHead>
+                <SortableTableHead sortKey="action" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Action</SortableTableHead>
+                <SortableTableHead sortKey="quantity" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Qty</SortableTableHead>
+                <SortableTableHead sortKey="price" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Price</SortableTableHead>
+                <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Amount</SortableTableHead>
+                <SortableTableHead sortKey="strategy_name" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Strategy</SortableTableHead>
+                <SortableTableHead sortKey="pair_id" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Pair ID</SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tradesLoading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
               ) : sortedTrades.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
-                    No trades found. Import some data to get started.
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">No trades found.</TableCell></TableRow>
               ) : (
                 Object.entries(groupedTrades).map(([strategyId, group]) => (
                   <>
-                    <TableRow key={strategyId} className="bg-muted/50 hover:bg-muted/50 border-y border-border/50">
+                    <TableRow key={strategyId} className="bg-muted/50 hover:bg-muted/50 border-y">
                       <TableCell colSpan={9} className="py-2 font-semibold text-primary/80">
                         {group.name} ({group.trades.length} trades)
                       </TableCell>
                     </TableRow>
                     {group.trades.map((trade) => (
-                      <TableRow key={trade.id} className={trade.pair_id ? "bg-primary/5" : ""}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedTrades.includes(trade.id)}
-                            onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)}
-                            aria-label={`Select trade ${trade.id}`}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium min-w-[120px]">
-                          {format(new Date(trade.date), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="font-mono">
-                            {trade.symbol}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className={
-                            trade.action.includes('BUY') ? "text-red-400" : "text-green-400"
-                          }>
-                            {trade.action}
-                          </span>
-                        </TableCell>
+                      <TableRow key={trade.id} data-state={selectedTrades.includes(trade.id) && "selected"} className={trade.pair_id ? "bg-primary/5" : ""}>
+                        <TableCell><Checkbox checked={selectedTrades.includes(trade.id)} onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)} /></TableCell>
+                        <TableCell className="font-medium min-w-[120px]">{format(new Date(trade.date), 'MMM d, yyyy')}</TableCell>
+                        <TableCell><Badge variant="outline" className="font-mono">{trade.symbol}</Badge></TableCell>
+                        <TableCell><span className={trade.action.includes('BUY') ? "text-red-400" : "text-green-400"}>{trade.action}</span></TableCell>
                         <TableCell className="text-right">{trade.quantity}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(trade.price / trade.multiplier, 2)}
-                        </TableCell>
-                        <TableCell className={`text-right font-bold ${
-                          Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"
-                        }`}>
-                          {formatCurrency(trade.amount, 2)}
-                        </TableCell>
+                        <TableCell className="text-right">{formatCurrency(trade.price / trade.multiplier, 2)}</TableCell>
+                        <TableCell className={`text-right font-bold ${Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatCurrency(trade.amount, 2)}</TableCell>
                         <TableCell className="min-w-[200px]">
-                          <Select 
-                            defaultValue={trade.strategy_id || "none"} 
-                            onValueChange={(val) => handleStrategyChange(trade.id, val)}
-                            disabled={updateStrategyMutation.isPending}
-                          >
-                            <SelectTrigger className="w-full h-8">
-                              <SelectValue placeholder="Assign Strategy" />
-                            </SelectTrigger>
+                          <Select defaultValue={trade.strategy_id || "none"} onValueChange={(val) => handleStrategyChange(trade.id, val)} disabled={updateStrategyMutation.isPending}>
+                            <SelectTrigger className="w-full h-8"><SelectValue placeholder="Assign" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none" className="text-muted-foreground">
-                                Unassigned
-                              </SelectItem>
-                              {strategies?.map((s) => (
-                                <SelectItem key={s.id} value={s.id}>
-                                  {s.name}
-                                </SelectItem>
-                              ))}
+                              <SelectItem value="none" className="text-muted-foreground">Unassigned</SelectItem>
+                              {strategies?.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate">
-                          {trade.pair_id ? (
-                            <Badge variant="secondary" className="font-mono">
-                              {trade.pair_id.substring(0, 8)}...
-                            </Badge>
-                          ) : (
-                            "N/A"
-                          )}
+                          {trade.pair_id ? (<Badge variant="secondary" className="font-mono">{trade.pair_id.substring(0, 8)}...</Badge>) : "N/A"}
                         </TableCell>
                       </TableRow>
                     ))}

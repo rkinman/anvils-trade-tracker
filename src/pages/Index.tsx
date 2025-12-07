@@ -12,11 +12,11 @@ const Index = () => {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
-      // 1. Fetch all trades to calculate metrics
-      // Note: We could use a VIEW for this too if it gets heavy, but for charts we need the raw data points anyway
+      // 1. Fetch all non-hidden trades to calculate metrics
       const { data: trades, error } = await supabase
         .from('trades')
         .select('amount, action, quantity, date')
+        .eq('hidden', false) // Exclude hidden trades
         .order('date', { ascending: true });
       
       if (error) throw error;

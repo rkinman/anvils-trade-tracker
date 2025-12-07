@@ -20,10 +20,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown, Tag } from "lucide-react";
+import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown, Tag, EyeOff, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { showSuccess, showError } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -52,6 +55,7 @@ interface Trade {
   notes: string | null;
   import_hash: string | null;
   created_at: string;
+  hidden: boolean;
   strategies: { id: string; name: string } | null;
 }
 
@@ -112,6 +116,7 @@ export default function TradeHistory() {
   const [selectedTrades, setSelectedTrades] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [showHidden, setShowHidden] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch Trades
@@ -154,8 +159,7 @@ export default function TradeHistory() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trades'] });
-      queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['trades', 'strategies'] });
       showSuccess("Trade updated");
     },
     onError: (err) => { showError(err.message); }
@@ -168,8 +172,7 @@ export default function TradeHistory() {
       if (error) throw error;
     },
     onSuccess: (data, strategyId) => {
-      queryClient.invalidateQueries({ queryKey: ['trades'] });
-      queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['trades', 'strategies'] });
       const strategyName = strategies?.find(s => s.id === strategyId)?.name || 'Unassigned';
       showSuccess(`Assigned ${selectedTrades.length} trades to "${strategyName}".`);
       setSelectedTrades([]);
@@ -205,6 +208,19 @@ export default function TradeHistory() {
     onError: (err) => { showError(err.message); }
   });
 
+  const updateHiddenStatusMutation = useMutation({
+    mutationFn: async ({ ids, hidden }: { ids: string[], hidden: boolean }) => {
+      const { error } = await supabase.from('trades').update({ hidden }).in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: (data, { hidden }) => {
+      queryClient.invalidateQueries({ queryKey: ['trades', 'dashboard-stats', 'strategies'] });
+      showSuccess(`Successfully ${hidden ? 'hid' : 'unhid'} ${selectedTrades.length} trades.`);
+      setSelectedTrades([]);
+    },
+    onError: (err) => { showError(err.message); }
+  });
+
   // --- Handlers ---
   const handleStrategyChange = (tradeId: string, value: string) => {
     updateStrategyMutation.mutate({ tradeId, strategyId: value === "none" ? null : value });
@@ -222,8 +238,7 @@ export default function TradeHistory() {
     setSelectedTrades(prevSelected => {
       const groupIds = new Set(tradeIdsInGroup);
       if (checked) {
-        const newSelection = new Set([...prevSelected, ...tradeIdsInGroup]);
-        return Array.from(newSelection);
+        return Array.from(new Set([...prevSelected, ...tradeIdsInGroup]));
       } else {
         return prevSelected.filter(id => !groupIds.has(id));
       }
@@ -232,6 +247,8 @@ export default function TradeHistory() {
 
   const handleBulkPair = () => pairTradesMutation.mutate(selectedTrades);
   const handleBulkUnpair = () => unpairTradesMutation.mutate(selectedTrades);
+  const handleBulkHide = () => updateHiddenStatusMutation.mutate({ ids: selectedTrades, hidden: true });
+  const handleBulkUnhide = () => updateHiddenStatusMutation.mutate({ ids: selectedTrades, hidden: false });
   
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -244,10 +261,12 @@ export default function TradeHistory() {
 
   // --- Memoized Data ---
   const filteredTrades = useMemo(() => 
-    trades?.filter(trade => 
-      trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trade.action.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [trades, searchTerm]);
+    trades?.filter(trade => {
+      const matchesSearch = trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            trade.action.toLowerCase().includes(searchTerm.toLowerCase());
+      const isVisible = showHidden ? true : !trade.hidden;
+      return matchesSearch && isVisible;
+    }), [trades, searchTerm, showHidden]);
 
   const sortedTrades = useMemo(() => {
     if (!filteredTrades) return [];
@@ -296,9 +315,15 @@ export default function TradeHistory() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Trade History</h2>
-          <p className="text-muted-foreground">View all transactions and assign them to strategies.</p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Trade History</h2>
+            <p className="text-muted-foreground">View all transactions and assign them to strategies.</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Switch id="show-hidden" checked={showHidden} onCheckedChange={setShowHidden} />
+            <Label htmlFor="show-hidden">Show Hidden</Label>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-4">
@@ -321,6 +346,16 @@ export default function TradeHistory() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Visibility</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={handleBulkHide} disabled={updateHiddenStatusMutation.isPending}>
+                    <EyeOff className="mr-2 h-4 w-4" /> Hide Selected
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleBulkUnhide} disabled={updateHiddenStatusMutation.isPending}>
+                    <Eye className="mr-2 h-4 w-4" /> Unhide Selected
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Pairing</DropdownMenuLabel>
                   <DropdownMenuItem onClick={handleBulkPair} disabled={pairTradesMutation.isPending}>
@@ -380,6 +415,7 @@ export default function TradeHistory() {
                           <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
                           <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Symbol</SortableTableHead>
                           <SortableTableHead sortKey="action" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Action</SortableTableHead>
+                          <TableHead>Status</TableHead>
                           <SortableTableHead sortKey="quantity" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Qty</SortableTableHead>
                           <SortableTableHead sortKey="price" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Price</SortableTableHead>
                           <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Amount</SortableTableHead>
@@ -389,11 +425,12 @@ export default function TradeHistory() {
                       </TableHeader>
                       <TableBody>
                         {group.trades.map((trade) => (
-                          <TableRow key={trade.id} data-state={selectedTrades.includes(trade.id) && "selected"} className={trade.pair_id ? "bg-primary/5" : ""}>
+                          <TableRow key={trade.id} data-state={selectedTrades.includes(trade.id) && "selected"} className={cn(trade.pair_id && "bg-primary/5", trade.hidden && "opacity-60 bg-muted/50")}>
                             <TableCell><Checkbox checked={selectedTrades.includes(trade.id)} onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)} /></TableCell>
                             <TableCell className="font-medium min-w-[120px]">{format(new Date(trade.date), 'MMM d, yyyy')}</TableCell>
                             <TableCell><Badge variant="outline" className="font-mono">{trade.symbol}</Badge></TableCell>
                             <TableCell><span className={trade.action.includes('BUY') ? "text-red-400" : "text-green-400"}>{trade.action}</span></TableCell>
+                            <TableCell>{trade.hidden && <Badge variant="secondary">Hidden</Badge>}</TableCell>
                             <TableCell className="text-right">{trade.quantity}</TableCell>
                             <TableCell className="text-right">{formatCurrency(trade.price / trade.multiplier, 2)}</TableCell>
                             <TableCell className={`text-right font-bold ${Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatCurrency(trade.amount, 2)}</TableCell>

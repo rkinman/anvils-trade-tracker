@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { showSuccess, showError } from "@/utils/toast";
-import { Loader2, Save, Plus, ArrowLeft, Search, Tag, Trash2, ChevronDown, ChevronRight, Calculator, Briefcase, Link as LinkIcon } from "lucide-react";
+import { Loader2, Save, Plus, ArrowLeft, Search, Tag, Trash2, ChevronDown, ChevronRight, Calculator, Briefcase, Link as LinkIcon, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -30,14 +30,15 @@ interface Trade {
   date: string;
   symbol: string;
   action: string;
-  amount: number; // Total Cash Flow (Negative for Debit, Positive for Credit)
+  amount: number;
   tag_id: string | null;
   mark_price: number | null;
   quantity: number;
   multiplier: number;
-  price: number; // Unit Price
+  price: number;
   pair_id: string | null;
   unrealized_pnl: number | null;
+  tags?: { id: string; name: string } | null;
 }
 
 interface Tag {
@@ -47,18 +48,60 @@ interface Tag {
 }
 
 interface TradeGroup {
-  id: string; // pair_id or trade_id if single
+  id: string;
   isPair: boolean;
   trades: Trade[];
   summary: {
     date: string;
     symbol: string;
-    totalAmount: number; // Net Cost Basis (Realized Cash Flow)
+    totalAmount: number;
     totalMarketValue: number;
     totalPnl: number;
     isOpen: boolean;
   };
 }
+
+// Define sorting types
+type SortKey = 'date' | 'symbol' | 'action' | 'quantity' | 'price' | 'amount' | 'tag_name' | 'pair_id';
+type SortDirection = 'asc' | 'desc';
+
+// Component for sortable header
+interface SortableTableHeadProps {
+  children: React.ReactNode;
+  sortKey: SortKey;
+  currentSortKey: SortKey;
+  currentSortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}
+
+const SortableTableHead: React.FC<SortableTableHeadProps> = ({
+  children,
+  sortKey,
+  currentSortKey,
+  currentSortDirection,
+  onSort,
+  className
+}) => {
+  const isCurrent = currentSortKey === sortKey;
+  const Icon = isCurrent
+    ? currentSortDirection === 'asc'
+      ? ArrowUp
+      : ArrowDown
+    : ArrowUpDown;
+
+  return (
+    <TableHead
+      className={`cursor-pointer hover:bg-muted/50 transition-colors ${className}`}
+      onClick={() => onSort(sortKey)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <Icon className={`h-3 w-3 ${isCurrent ? 'opacity-100' : 'opacity-50'}`} />
+      </div>
+    </TableHead>
+  );
+};
 
 export default function StrategyDetail() {
   const { strategyId } = useParams<{ strategyId: string }>();
@@ -68,6 +111,8 @@ export default function StrategyDetail() {
   const [searchTerm, setSearchTerm] = useState("");
   const [newTagName, setNewTagName] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   
   // --- QUERIES ---
   const { data: strategy, isLoading: strategyLoading } = useQuery({
@@ -105,7 +150,13 @@ export default function StrategyDetail() {
     queryKey: ['assignedTrades', strategyId],
     queryFn: async () => {
       const { data, error } = await supabase.from('trades')
-        .select('*')
+        .select(`
+          *,
+          tags (
+            id,
+            name
+          )
+        `)
         .eq('strategy_id', strategyId!)
         .order('date', { ascending: false });
       if (error) throw error;
@@ -181,11 +232,37 @@ export default function StrategyDetail() {
     onError: (err) => showError(err.message)
   });
 
+  const updateTradeTagMutation = useMutation({
+    mutationFn: async ({ tradeId, tagId }: { tradeId: string, tagId: string | null }) => {
+      const { error } = await supabase.from('trades').update({ tag_id: tagId }).eq('id', tradeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
+      queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      showSuccess("Trade tag updated");
+    },
+    onError: (err) => showError(err.message)
+  });
+
   // --- HANDLERS ---
   const handleSave = () => updateStrategyMutation.mutate(formState);
   const handleAddSelected = () => assignTradesMutation.mutate(selectedUnassigned);
   const handleCreateTag = () => {
     if (newTagName.trim()) createTagMutation.mutate(newTagName.trim());
+  };
+
+  const handleTradeTagChange = (tradeId: string, tagId: string) => {
+    updateTradeTagMutation.mutate({ tradeId, tagId: tagId === "none" ? null : tagId });
+  };
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('desc');
+    }
   };
 
   const toggleGroup = (groupId: string) => {
@@ -199,108 +276,119 @@ export default function StrategyDetail() {
 
   const filteredUnassignedTrades = useMemo(() => unassignedTrades?.filter(t => t.symbol.toLowerCase().includes(searchTerm.toLowerCase())), [unassignedTrades, searchTerm]);
 
-  // --- DATA PROCESSING (Grouping) ---
-  const groupedTrades = useMemo<TradeGroup[]>(() => {
-    if (!assignedTrades) return [];
+  // --- DATA PROCESSING (Grouping by Tags) ---
+  const groupedTradesByTag = useMemo(() => {
+    if (!assignedTrades) return {};
 
-    const groups: Record<string, TradeGroup> = {};
+    // First sort trades
+    const sortedTrades = [...assignedTrades].sort((a, b) => {
+      let aValue: any = a[sortKey as keyof Trade];
+      let bValue: any = b[sortKey as keyof Trade];
 
-    assignedTrades.forEach(trade => {
-      // Use pair_id as group key if exists, otherwise trade.id
+      if (sortKey === 'date') {
+        aValue = new Date(a.date).getTime();
+        bValue = new Date(b.date).getTime();
+      } else if (sortKey === 'tag_name') {
+        aValue = a.tags?.name || '';
+        bValue = b.tags?.name || '';
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // Group by tag
+    const groups: Record<string, { name: string; trades: TradeGroup[] }> = {};
+
+    sortedTrades.forEach(trade => {
+      const tagId = trade.tag_id || 'untagged';
+      const tagName = trade.tags?.name || 'Untagged Trades';
+
+      if (!groups[tagId]) {
+        groups[tagId] = { name: tagName, trades: [] };
+      }
+
+      // Create trade groups (pairs vs singles)
       const groupId = trade.pair_id || trade.id;
       const isPair = !!trade.pair_id;
 
-      if (!groups[groupId]) {
-        groups[groupId] = {
+      let existingGroup = groups[tagId].trades.find(g => g.id === groupId);
+      if (!existingGroup) {
+        existingGroup = {
           id: groupId,
           isPair,
           trades: [],
           summary: {
             date: trade.date,
-            symbol: trade.symbol, // Will refine later
+            symbol: trade.symbol,
             totalAmount: 0,
             totalMarketValue: 0,
             totalPnl: 0,
             isOpen: false
           }
         };
+        groups[tagId].trades.push(existingGroup);
       }
 
-      groups[groupId].trades.push(trade);
+      existingGroup.trades.push(trade);
     });
 
-    // Calculate Summary stats for each group
-    return Object.values(groups).map(group => {
-      let totalAmount = 0;
-      let totalMarketValue = 0;
-      let totalPnl = 0;
-      let isOpen = false;
-      let symbols = new Set<string>();
+    // Calculate summaries for each group
+    Object.values(groups).forEach(tagGroup => {
+      tagGroup.trades.forEach(group => {
+        let totalAmount = 0;
+        let totalMarketValue = 0;
+        let totalPnl = 0;
+        let isOpen = false;
+        let symbols = new Set<string>();
 
-      group.trades.forEach(trade => {
-        symbols.add(trade.symbol);
-        totalAmount += trade.amount;
+        group.trades.forEach(trade => {
+          symbols.add(trade.symbol);
+          totalAmount += trade.amount;
 
-        // --- P&L CALCULATION LOGIC ---
-        // 1. Determine if Long or Short
-        let sign = 1; // Default to Long
-        const actionUpper = trade.action.toUpperCase();
-        if (actionUpper.includes('SELL') || actionUpper.includes('SHORT')) {
-          sign = -1; // Short
-        }
+          let sign = 1;
+          const actionUpper = trade.action.toUpperCase();
+          if (actionUpper.includes('SELL') || actionUpper.includes('SHORT')) {
+            sign = -1;
+          }
 
-        // 2. Check if Open (has mark_price)
-        if (trade.mark_price !== null) {
-          isOpen = true;
-          // Market Value = Mark * Qty * Multiplier * Sign
-          // Note: Short MV is negative (liability), Long MV is positive (asset)
-          // Actually, for Net Liq purposes: 
-          // Long Call Value = $500.
-          // Short Call Cost to Close = $500. Net Liq Impact = -$500.
-          // So:
-          // Long MV = Mark * Qty * Mult (+ve)
-          // Short MV = Mark * Qty * Mult * -1 (-ve)
-          const mv = (trade.mark_price || 0) * trade.quantity * trade.multiplier * sign;
-          
-          totalMarketValue += mv;
-          
-          // P&L = MV + Cost Basis (Amount)
-          // Example Long: Cost -500. MV +600. P&L = +100.
-          // Example Short: Credit +500. MV -100. P&L = +400.
-          totalPnl += (mv + trade.amount);
-        } else {
-          // Closed trade. P&L is just the realized amount.
-          // (assuming closed trades have no residual market value)
-          totalPnl += trade.amount;
-        }
-      });
+          if (trade.mark_price !== null) {
+            isOpen = true;
+            const mv = (trade.mark_price || 0) * trade.quantity * trade.multiplier * sign;
+            totalMarketValue += mv;
+            totalPnl += (mv + trade.amount);
+          } else {
+            totalPnl += trade.amount;
+          }
+        });
 
-      // Refine Symbol Summary
-      const symbolList = Array.from(symbols);
-      const displaySymbol = symbolList.length === 1 
-        ? symbolList[0] 
-        : group.isPair 
-          ? `${symbolList[0]} + ${symbolList.length - 1} legs` 
-          : symbolList[0];
+        const symbolList = Array.from(symbols);
+        const displaySymbol = symbolList.length === 1 
+          ? symbolList[0] 
+          : group.isPair 
+            ? `${symbolList[0]} + ${symbolList.length - 1} legs` 
+            : symbolList[0];
 
-      // Use the earliest date for the group
-      group.trades.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      const displayDate = group.trades[0]?.date;
+        group.trades.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const displayDate = group.trades[0]?.date;
 
-      return {
-        ...group,
-        summary: {
+        group.summary = {
           date: displayDate,
           symbol: displaySymbol,
           totalAmount,
           totalMarketValue,
           totalPnl,
           isOpen
-        }
-      };
-    }).sort((a, b) => new Date(b.summary.date).getTime() - new Date(a.summary.date).getTime());
-  }, [assignedTrades]);
+        };
+      });
 
+      // Sort groups within each tag by date
+      tagGroup.trades.sort((a, b) => new Date(b.summary.date).getTime() - new Date(a.summary.date).getTime());
+    });
+
+    return groups;
+  }, [assignedTrades, sortKey, sortDirection]);
 
   if (strategyLoading) return <DashboardLayout><Loader2 className="h-8 w-8 animate-spin mx-auto mt-10" /></DashboardLayout>;
 
@@ -399,7 +487,7 @@ export default function StrategyDetail() {
             <div>
               <CardTitle>Trades & Positions</CardTitle>
               <CardDescription>
-                Grouped by pair. Expand to see leg details and P&L.
+                Grouped by tags. Expand to see leg details and P&L.
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -455,124 +543,160 @@ export default function StrategyDetail() {
           </CardHeader>
           <CardContent>
             {assignedTradesLoading ? <Loader2 className="h-6 w-6 animate-spin mx-auto mt-10" /> : (
-              <div className="border rounded-md overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-[50px]"></TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Structure / Symbol</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Cost Basis</TableHead>
-                      <TableHead className="text-right">Current Value</TableHead>
-                      <TableHead className="text-right">Net P&L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {groupedTrades.map(group => {
-                      const isExpanded = expandedGroups.has(group.id);
-                      return (
-                        <Fragment key={group.id}>
-                          {/* GROUP ROW */}
-                          <TableRow 
-                            className={cn(
-                              "cursor-pointer hover:bg-muted/30 transition-colors", 
-                              isExpanded && "bg-muted/20 border-b-0"
-                            )}
-                            onClick={() => toggleGroup(group.id)}
-                          >
-                            <TableCell className="text-center">
-                              {group.isPair ? (
-                                isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
-                              ) : (
-                                <div className="w-4" /> // Spacer for single trades
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">{format(new Date(group.summary.date), 'MMM d, yyyy')}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">{group.summary.symbol}</span>
-                                {group.isPair && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {group.summary.isOpen ? 
-                                <Badge variant="default" className="bg-green-600 hover:bg-green-700">Open</Badge> : 
-                                <Badge variant="secondary">Closed</Badge>
-                              }
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalAmount)}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                                {group.summary.isOpen ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalMarketValue) : '-'}
-                            </TableCell>
-                            <TableCell className={cn("text-right font-bold", group.summary.totalPnl >= 0 ? "text-green-500" : "text-red-500")}>
-                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalPnl)}
-                            </TableCell>
+              <div className="space-y-8">
+                {Object.entries(groupedTradesByTag).map(([tagId, tagGroup]) => (
+                  <div key={tagId}>
+                    <h3 className="text-xl font-semibold mb-3 text-primary/90 flex items-center gap-2">
+                      <Tag className="h-5 w-5" />
+                      {tagGroup.name} ({tagGroup.trades.length} positions)
+                    </h3>
+                    <div className="border rounded-md overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="w-[50px]"></TableHead>
+                            <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
+                            <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Structure / Symbol</SortableTableHead>
+                            <TableHead>Status</TableHead>
+                            <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Cost Basis</SortableTableHead>
+                            <TableHead className="text-right">Current Value</TableHead>
+                            <TableHead className="text-right">Net P&L</TableHead>
+                            <TableHead>Tag</TableHead>
                           </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {tagGroup.trades.map(group => {
+                            const isExpanded = expandedGroups.has(group.id);
+                            return (
+                              <Fragment key={group.id}>
+                                {/* GROUP ROW */}
+                                <TableRow 
+                                  className={cn(
+                                    "cursor-pointer hover:bg-muted/30 transition-colors", 
+                                    isExpanded && "bg-muted/20 border-b-0"
+                                  )}
+                                  onClick={() => toggleGroup(group.id)}
+                                >
+                                  <TableCell className="text-center">
+                                    {group.isPair ? (
+                                      isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                                    ) : (
+                                      <div className="w-4" />
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="font-medium">{format(new Date(group.summary.date), 'MMM d, yyyy')}</TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold">{group.summary.symbol}</span>
+                                      {group.isPair && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {group.summary.isOpen ? 
+                                      <Badge variant="default" className="bg-green-600 hover:bg-green-700">Open</Badge> : 
+                                      <Badge variant="secondary">Closed</Badge>
+                                    }
+                                  </TableCell>
+                                  <TableCell className="text-right text-muted-foreground">
+                                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalAmount)}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono">
+                                      {group.summary.isOpen ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalMarketValue) : '-'}
+                                  </TableCell>
+                                  <TableCell className={cn("text-right font-bold", group.summary.totalPnl >= 0 ? "text-green-500" : "text-red-500")}>
+                                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalPnl)}
+                                  </TableCell>
+                                  <TableCell className="min-w-[200px]">
+                                    <Select 
+                                      defaultValue={group.trades[0]?.tag_id || "none"} 
+                                      onValueChange={(val) => {
+                                        // Apply tag to all trades in the group
+                                        group.trades.forEach(trade => {
+                                          handleTradeTagChange(trade.id, val);
+                                        });
+                                      }} 
+                                      disabled={updateTradeTagMutation.isPending}
+                                    >
+                                      <SelectTrigger className="w-full h-8">
+                                        <SelectValue placeholder="Assign Tag" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none" className="text-muted-foreground">No Tag</SelectItem>
+                                        {tags?.map((tag) => (
+                                          <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                </TableRow>
 
-                          {/* LEGS / EXPANDED ROW */}
-                          {/* Only expand if paired or if single trade is open (to see stats) - actually logic below expands everything if clicked */}
-                          {isExpanded && (
-                            <TableRow className="bg-muted/5 hover:bg-muted/5">
-                              <TableCell colSpan={7} className="p-0">
-                                <div className="border-t border-b bg-muted/10 py-2">
-                                  <Table>
-                                    <TableHeader>
-                                        <TableRow className="border-none">
-                                            <TableHead className="pl-12 text-xs">Leg Date</TableHead>
-                                            <TableHead className="text-xs">Leg Action</TableHead>
-                                            <TableHead className="text-xs">Symbol</TableHead>
-                                            <TableHead className="text-xs text-right">Entry Price</TableHead>
-                                            <TableHead className="text-xs text-right">Mark Price</TableHead>
-                                            <TableHead className="text-xs text-right">Leg P&L</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {group.trades.map(trade => {
-                                            // Leg P&L Calc
-                                            let sign = 1;
-                                            if (trade.action.toUpperCase().includes('SELL') || trade.action.toUpperCase().includes('SHORT')) sign = -1;
-                                            const mv = (trade.mark_price || 0) * trade.quantity * trade.multiplier * sign;
-                                            const legPnl = (trade.mark_price !== null) ? (mv + trade.amount) : trade.amount;
-                                            const entryPrice = Math.abs(trade.amount / (trade.quantity * trade.multiplier));
-                                            
-                                            return (
-                                                <TableRow key={trade.id} className="border-none hover:bg-transparent">
-                                                    <TableCell className="pl-12 text-xs text-muted-foreground">{format(new Date(trade.date), 'MM/dd/yy')}</TableCell>
-                                                    <TableCell className="text-xs">
-                                                        <span className={trade.action.includes('BUY') ? "text-red-500" : "text-green-500"}>{trade.action}</span>
-                                                    </TableCell>
-                                                    <TableCell className="text-xs font-mono">{trade.symbol}</TableCell>
-                                                    <TableCell className="text-xs text-right font-mono">${entryPrice.toFixed(2)}</TableCell>
-                                                    <TableCell className="text-xs text-right font-mono">
-                                                        {trade.mark_price ? `$${trade.mark_price.toFixed(2)}` : '-'}
-                                                    </TableCell>
-                                                    <TableCell className={cn("text-xs text-right font-bold", legPnl >= 0 ? "text-green-600/70" : "text-red-600/70")}>
-                                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(legPnl)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </TableCell>
-                            </TableRow>
+                                {/* LEGS / EXPANDED ROW */}
+                                {isExpanded && (
+                                  <TableRow className="bg-muted/5 hover:bg-muted/5">
+                                    <TableCell colSpan={8} className="p-0">
+                                      <div className="border-t border-b bg-muted/10 py-2">
+                                        <Table>
+                                          <TableHeader>
+                                              <TableRow className="border-none">
+                                                  <TableHead className="pl-12 text-xs">Leg Date</TableHead>
+                                                  <TableHead className="text-xs">Leg Action</TableHead>
+                                                  <TableHead className="text-xs">Symbol</TableHead>
+                                                  <TableHead className="text-xs text-right">Entry Price</TableHead>
+                                                  <TableHead className="text-xs text-right">Mark Price</TableHead>
+                                                  <TableHead className="text-xs text-right">Leg P&L</TableHead>
+                                              </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                              {group.trades.map(trade => {
+                                                  let sign = 1;
+                                                  if (trade.action.toUpperCase().includes('SELL') || trade.action.toUpperCase().includes('SHORT')) sign = -1;
+                                                  const mv = (trade.mark_price || 0) * trade.quantity * trade.multiplier * sign;
+                                                  const legPnl = (trade.mark_price !== null) ? (mv + trade.amount) : trade.amount;
+                                                  const entryPrice = Math.abs(trade.amount / (trade.quantity * trade.multiplier));
+                                                  
+                                                  return (
+                                                      <TableRow key={trade.id} className="border-none hover:bg-transparent">
+                                                          <TableCell className="pl-12 text-xs text-muted-foreground">{format(new Date(trade.date), 'MM/dd/yy')}</TableCell>
+                                                          <TableCell className="text-xs">
+                                                              <span className={trade.action.includes('BUY') ? "text-red-500" : "text-green-500"}>{trade.action}</span>
+                                                          </TableCell>
+                                                          <TableCell className="text-xs font-mono">{trade.symbol}</TableCell>
+                                                          <TableCell className="text-xs text-right font-mono">${entryPrice.toFixed(2)}</TableCell>
+                                                          <TableCell className="text-xs text-right font-mono">
+                                                              {trade.mark_price ? `$${trade.mark_price.toFixed(2)}` : '-'}
+                                                          </TableCell>
+                                                          <TableCell className={cn("text-xs text-right font-bold", legPnl >= 0 ? "text-green-600/70" : "text-red-600/70")}>
+                                                              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(legPnl)}
+                                                          </TableCell>
+                                                      </TableRow>
+                                                  );
+                                              })}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                          {tagGroup.trades.length === 0 && (
+                              <TableRow>
+                                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                      No trades in this tag yet.
+                                  </TableCell>
+                              </TableRow>
                           )}
-                        </Fragment>
-                      );
-                    })}
-                    {groupedTrades.length === 0 && (
-                        <TableRow>
-                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                                No trades assigned to this strategy yet.
-                            </TableCell>
-                        </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(groupedTradesByTag).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No trades assigned to this strategy yet.
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

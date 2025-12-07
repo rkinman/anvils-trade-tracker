@@ -94,8 +94,20 @@ export default function ImportTrades() {
       }
 
       if (updates.length > 0) {
-        const { error: updateError } = await supabase.from('trades').upsert(updates);
-        if (updateError) throw updateError;
+        const updatePromises = updates.map(update =>
+          supabase
+            .from('trades')
+            .update({ mark_price: update.mark_price })
+            .eq('id', update.id)
+        );
+        
+        const results = await Promise.all(updatePromises);
+        const failedUpdates = results.filter(res => res.error);
+
+        if (failedUpdates.length > 0) {
+          console.error('Some position updates failed:', failedUpdates);
+          throw new Error(`Failed to update ${failedUpdates.length} of ${updates.length} positions.`);
+        }
       }
 
       const matchedCount = matchedTradeIds.size;

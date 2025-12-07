@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ImportTrades from "./pages/ImportTrades";
+import Strategies from "./pages/Strategies";
+import TradeHistory from "./pages/TradeHistory";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 
@@ -63,6 +65,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ImportTrades />
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/strategies"
+              element={
+                <ProtectedRoute>
+                  <Strategies />
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <TradeHistory />
                 </ProtectedRoute>
               }
             />

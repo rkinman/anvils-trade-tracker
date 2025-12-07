@@ -40,7 +40,8 @@ const sanitizeCurrency = (value: string | undefined): number => {
   
   const isNegative = sanitized.startsWith('(') && sanitized.endsWith(')');
   
-  // Remove non-numeric characters except for the decimal point
+  // Remove non-numeric characters except for the decimal point and minus sign.
+  // This will strip commas, quotes, dollar signs etc.
   sanitized = sanitized.replace(/[^0-9.-]+/g, "");
   
   let number = parseFloat(sanitized);
@@ -57,26 +58,29 @@ export const parseTradeCSV = (file: File): Promise<ParsedTrade[]> => {
       skipEmptyLines: true,
       complete: (results) => {
         try {
-          const trades: ParsedTrade[] = results.data
-            .filter((row: any) => row.Symbol && (row.Date || row.Time))
+          const trades: ParsedTrade[] = (results.data as any[])
+            .filter((row: any) => row.Type === 'Trade' && row.Symbol) // Explicitly filter for trades
             .map((row: any) => {
-              // Sanitize and parse all relevant financial values
               const quantity = parseFloat(row.Quantity || '0');
-              const averagePricePerShare = sanitizeCurrency(row['Average Price'] || row.Price);
-              const amount = sanitizeCurrency(row.Value || row.Amount);
-              const fees = sanitizeCurrency(row.Fees || row.Commission);
+              // 'Average Price' in tastytrade CSV is price per contract/lot, not per share for options.
+              const pricePerContract = sanitizeCurrency(row['Average Price']);
+              const amount = sanitizeCurrency(row.Value);
+              const commissions = sanitizeCurrency(row.Commissions);
+              const fees = sanitizeCurrency(row.Fees);
               
-              // Determine multiplier: prioritize CSV column, then use a heuristic
-              let multiplier = parseFloat(row.Multiplier || '0');
-              if (multiplier === 0) {
-                // Fallback heuristic if Multiplier column is not present or zero
-                const isOption = row.Symbol.length > 5; 
-                multiplier = isOption ? 100 : 1;
+              let multiplier = parseFloat(row.Multiplier);
+              if (isNaN(multiplier) || multiplier === 0) {
+                const instrumentType = row['Instrument Type'] || '';
+                if (instrumentType.includes('Option')) {
+                  multiplier = 100;
+                } else {
+                  multiplier = 1;
+                }
               }
 
               // The UI displays per-share price by calculating `database_price / multiplier`.
-              // Therefore, we must store the total price for the lot/contract.
-              const price = averagePricePerShare * multiplier;
+              // 'Average Price' from the CSV is already the value we want to store as `price`.
+              const price = pricePerContract;
 
               const asset_type = multiplier === 100 ? 'OPTION' : 'STOCK';
 
@@ -84,9 +88,9 @@ export const parseTradeCSV = (file: File): Promise<ParsedTrade[]> => {
                 symbol: row.Symbol,
                 date: new Date(row.Date || row.Time).toISOString(),
                 action: row.Action?.toUpperCase() || 'UNKNOWN',
-                quantity,
-                price, // Storing total price (per-share * multiplier)
-                fees: Math.abs(fees),
+                quantity: Math.abs(quantity),
+                price,
+                fees: Math.abs(commissions) + Math.abs(fees),
                 amount,
                 asset_type,
                 multiplier,

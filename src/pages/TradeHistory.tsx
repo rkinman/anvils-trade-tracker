@@ -363,7 +363,7 @@ export default function TradeHistory() {
 
 
   const allSelected = filteredTrades && selectedTrades.length > 0 && selectedTrades.length === filteredTrades.length;
-  const indeterminate = selectedTrades.length > 0 && selectedTrades.length < (filteredTrades?.length || 0);
+  // const indeterminate = selectedTrades.length > 0 && selectedTrades.length < (filteredTrades?.length || 0); // Not used
 
   // Helper function for currency formatting
   const formatCurrency = (value: number, decimals: number = 2) => {
@@ -519,7 +519,7 @@ export default function TradeHistory() {
                   onSort={handleSort}
                 >
                   Strategy
-                </TableHead>
+                </SortableTableHead>
                 <SortableTableHead 
                   sortKey="pair_id" 
                   currentSortKey={sortKey} 

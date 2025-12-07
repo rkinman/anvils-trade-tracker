@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound";
 import ImportTrades from "./pages/ImportTrades";
 import Strategies from "./pages/Strategies";
 import TradeHistory from "./pages/TradeHistory";
+import Settings from "./pages/Settings";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 
@@ -81,6 +82,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <TradeHistory />
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />

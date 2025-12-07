@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -7,7 +7,8 @@ import {
   LogOut,
   Menu,
   X,
-  History
+  History,
+  Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
@@ -15,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MadeWithDyad } from "./made-with-dyad";
+import { useQuery } from "@tanstack/react-query";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -25,6 +27,31 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Fetch the custom app title
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('app_title')
+        .eq('id', user.id)
+        .single();
+      
+      return data;
+    },
+    staleTime: 1000 * 60 * 5 // Cache for 5 minutes
+  });
+
+  const appTitle = profile?.app_title || "TradeTracker";
+
+  // Update document title
+  useEffect(() => {
+    document.title = appTitle;
+  }, [appTitle]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -34,6 +61,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { icon: PieChart, label: "Strategies", path: "/strategies" },
     { icon: Upload, label: "Import Trades", path: "/import" },
     { icon: History, label: "Trade History", path: "/history" },
+    { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
   return (
@@ -56,8 +84,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       >
         <div className="p-6 flex flex-col h-full">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">
-              TradeTracker
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400 truncate">
+              {appTitle}
             </h1>
             {isMobile && (
               <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
@@ -114,7 +142,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
               <Menu className="h-6 w-6" />
             </Button>
-            <span className="ml-4 font-bold">TradeTracker</span>
+            <span className="ml-4 font-bold truncate">{appTitle}</span>
           </header>
         )}
 

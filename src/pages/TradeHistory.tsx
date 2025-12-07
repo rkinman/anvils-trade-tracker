@@ -218,8 +218,16 @@ export default function TradeHistory() {
     setSelectedTrades(prev => checked ? [...prev, tradeId] : prev.filter(id => id !== tradeId));
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedTrades(checked && filteredTrades ? filteredTrades.map(t => t.id) : []);
+  const handleSelectAllInGroup = (tradeIdsInGroup: string[], checked: boolean) => {
+    setSelectedTrades(prevSelected => {
+      const groupIds = new Set(tradeIdsInGroup);
+      if (checked) {
+        const newSelection = new Set([...prevSelected, ...tradeIdsInGroup]);
+        return Array.from(newSelection);
+      } else {
+        return prevSelected.filter(id => !groupIds.has(id));
+      }
+    });
   };
 
   const handleBulkPair = () => pairTradesMutation.mutate(selectedTrades);
@@ -285,8 +293,6 @@ export default function TradeHistory() {
     }, {} as Record<string, { name: string; trades: Trade[] }>);
   }, [sortedTrades]);
 
-  const allSelected = filteredTrades && selectedTrades.length > 0 && selectedTrades.length === filteredTrades.length;
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -348,64 +354,70 @@ export default function TradeHistory() {
           )}
         </div>
 
-        <div className="border rounded-md bg-card overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[40px]">
-                  <Checkbox checked={allSelected} onCheckedChange={handleSelectAll} aria-label="Select all" />
-                </TableHead>
-                <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
-                <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Symbol</SortableTableHead>
-                <SortableTableHead sortKey="action" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Action</SortableTableHead>
-                <SortableTableHead sortKey="quantity" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Qty</SortableTableHead>
-                <SortableTableHead sortKey="price" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Price</SortableTableHead>
-                <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Amount</SortableTableHead>
-                <SortableTableHead sortKey="strategy_name" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Strategy</SortableTableHead>
-                <SortableTableHead sortKey="pair_id" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Pair ID</SortableTableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tradesLoading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
-              ) : sortedTrades.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">No trades found.</TableCell></TableRow>
-              ) : (
-                Object.entries(groupedTrades).map(([strategyId, group]) => (
-                  <>
-                    <TableRow key={strategyId} className="bg-muted/50 hover:bg-muted/50 border-y">
-                      <TableCell colSpan={9} className="py-2 font-semibold text-primary/80">
-                        {group.name} ({group.trades.length} trades)
-                      </TableCell>
-                    </TableRow>
-                    {group.trades.map((trade) => (
-                      <TableRow key={trade.id} data-state={selectedTrades.includes(trade.id) && "selected"} className={trade.pair_id ? "bg-primary/5" : ""}>
-                        <TableCell><Checkbox checked={selectedTrades.includes(trade.id)} onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)} /></TableCell>
-                        <TableCell className="font-medium min-w-[120px]">{format(new Date(trade.date), 'MMM d, yyyy')}</TableCell>
-                        <TableCell><Badge variant="outline" className="font-mono">{trade.symbol}</Badge></TableCell>
-                        <TableCell><span className={trade.action.includes('BUY') ? "text-red-400" : "text-green-400"}>{trade.action}</span></TableCell>
-                        <TableCell className="text-right">{trade.quantity}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(trade.price / trade.multiplier, 2)}</TableCell>
-                        <TableCell className={`text-right font-bold ${Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatCurrency(trade.amount, 2)}</TableCell>
-                        <TableCell className="min-w-[200px]">
-                          <Select defaultValue={trade.strategy_id || "none"} onValueChange={(val) => handleStrategyChange(trade.id, val)} disabled={updateStrategyMutation.isPending}>
-                            <SelectTrigger className="w-full h-8"><SelectValue placeholder="Assign" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none" className="text-muted-foreground">Unassigned</SelectItem>
-                              {strategies?.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate">
-                          {trade.pair_id ? (<Badge variant="secondary" className="font-mono">{trade.pair_id.substring(0, 8)}...</Badge>) : "N/A"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <div className="space-y-8">
+          {tradesLoading ? (
+            <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+          ) : !sortedTrades || sortedTrades.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">No trades found.</div>
+          ) : (
+            Object.entries(groupedTrades).map(([strategyId, group]) => {
+              const allInGroupSelected = group.trades.every(t => selectedTrades.includes(t.id));
+              const someInGroupSelected = group.trades.some(t => selectedTrades.includes(t.id));
+
+              return (
+                <div key={strategyId}>
+                  <h3 className="text-xl font-semibold mb-3 text-primary/90">{group.name} ({group.trades.length} trades)</h3>
+                  <div className="border rounded-md bg-card overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[40px]">
+                            <Checkbox
+                              checked={allInGroupSelected ? true : (someInGroupSelected ? 'indeterminate' : false)}
+                              onCheckedChange={(checked) => handleSelectAllInGroup(group.trades.map(t => t.id), !!checked)}
+                            />
+                          </TableHead>
+                          <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
+                          <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Symbol</SortableTableHead>
+                          <SortableTableHead sortKey="action" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Action</SortableTableHead>
+                          <SortableTableHead sortKey="quantity" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Qty</SortableTableHead>
+                          <SortableTableHead sortKey="price" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Price</SortableTableHead>
+                          <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Amount</SortableTableHead>
+                          <SortableTableHead sortKey="strategy_name" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Strategy</SortableTableHead>
+                          <SortableTableHead sortKey="pair_id" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Pair ID</SortableTableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.trades.map((trade) => (
+                          <TableRow key={trade.id} data-state={selectedTrades.includes(trade.id) && "selected"} className={trade.pair_id ? "bg-primary/5" : ""}>
+                            <TableCell><Checkbox checked={selectedTrades.includes(trade.id)} onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)} /></TableCell>
+                            <TableCell className="font-medium min-w-[120px]">{format(new Date(trade.date), 'MMM d, yyyy')}</TableCell>
+                            <TableCell><Badge variant="outline" className="font-mono">{trade.symbol}</Badge></TableCell>
+                            <TableCell><span className={trade.action.includes('BUY') ? "text-red-400" : "text-green-400"}>{trade.action}</span></TableCell>
+                            <TableCell className="text-right">{trade.quantity}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(trade.price / trade.multiplier, 2)}</TableCell>
+                            <TableCell className={`text-right font-bold ${Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatCurrency(trade.amount, 2)}</TableCell>
+                            <TableCell className="min-w-[200px]">
+                              <Select defaultValue={trade.strategy_id || "none"} onValueChange={(val) => handleStrategyChange(trade.id, val)} disabled={updateStrategyMutation.isPending}>
+                                <SelectTrigger className="w-full h-8"><SelectValue placeholder="Assign" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none" className="text-muted-foreground">Unassigned</SelectItem>
+                                  {strategies?.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate">
+                              {trade.pair_id ? (<Badge variant="secondary" className="font-mono">{trade.pair_id.substring(0, 8)}...</Badge>) : "N/A"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
     </DashboardLayout>

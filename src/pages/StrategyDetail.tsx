@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -568,7 +568,7 @@ export default function StrategyDetail() {
                           {tagGroup.trades.map(group => {
                             const isExpanded = expandedGroups.has(group.id);
                             return (
-                              <Fragment key={group.id}>
+                              <div key={group.id}>
                                 {/* GROUP ROW */}
                                 <TableRow 
                                   className={cn(
@@ -677,7 +677,7 @@ export default function StrategyDetail() {
                                     </TableCell>
                                   </TableRow>
                                 )}
-                              </Fragment>
+                              </div>
                             );
                           })}
                           {tagGroup.trades.length === 0 && (

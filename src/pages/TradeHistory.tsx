@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Loader2, Link as LinkIcon, Unlink, Checkbox as CheckboxIcon } from "lucide-react";
+import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { showSuccess, showError } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -47,9 +47,54 @@ interface Trade {
   strategies: { id: string; name: string } | null;
 }
 
+// Define sorting types
+type SortKey = 'date' | 'symbol' | 'action' | 'quantity' | 'price' | 'amount' | 'strategy_name' | 'pair_id';
+type SortDirection = 'asc' | 'desc';
+
+// Component for sortable header
+interface SortableTableHeadProps {
+  children: React.ReactNode;
+  sortKey: SortKey;
+  currentSortKey: SortKey;
+  currentSortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}
+
+const SortableTableHead: React.FC<SortableTableHeadProps> = ({
+  children,
+  sortKey,
+  currentSortKey,
+  currentSortDirection,
+  onSort,
+  className
+}) => {
+  const isCurrent = currentSortKey === sortKey;
+  const Icon = isCurrent
+    ? currentSortDirection === 'asc'
+      ? ArrowUp
+      : ArrowDown
+    : ArrowUpDown;
+
+  return (
+    <TableHead
+      className={`cursor-pointer hover:bg-muted/50 transition-colors ${className}`}
+      onClick={() => onSort(sortKey)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <Icon className={`h-3 w-3 ${isCurrent ? 'opacity-100' : 'opacity-50'}`} />
+      </div>
+    </TableHead>
+  );
+};
+
+
 export default function TradeHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTrades, setSelectedTrades] = useState<string[]>([]);
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const queryClient = useQueryClient();
 
   // Fetch Trades
@@ -188,6 +233,15 @@ export default function TradeHistory() {
     if (selectedTrades.length === 0) return;
     unpairTradesMutation.mutate(selectedTrades);
   };
+  
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('desc'); // Default to descending for new sort key
+    }
+  };
 
   // --- Filtering ---
 
@@ -195,6 +249,48 @@ export default function TradeHistory() {
     trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
     trade.action.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // --- Sorting Logic ---
+  const sortedTrades = useMemo(() => {
+    if (!filteredTrades) return [];
+
+    const sorted = [...filteredTrades].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortKey) {
+        case 'date':
+          aValue = new Date(a.date).getTime();
+          bValue = new Date(b.date).getTime();
+          break;
+        case 'symbol':
+        case 'action':
+        case 'pair_id':
+          aValue = a[sortKey] || '';
+          bValue = b[sortKey] || '';
+          break;
+        case 'strategy_name':
+          aValue = a.strategies?.name || '';
+          bValue = b.strategies?.name || '';
+          break;
+        case 'quantity':
+        case 'price':
+        case 'amount':
+          aValue = Number(a[sortKey]);
+          bValue = Number(b[sortKey]);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [filteredTrades, sortKey, sortDirection]);
+
 
   const allSelected = filteredTrades && selectedTrades.length > 0 && selectedTrades.length === filteredTrades.length;
   const indeterminate = selectedTrades.length > 0 && selectedTrades.length < (filteredTrades?.length || 0);
@@ -256,14 +352,73 @@ export default function TradeHistory() {
                     className="translate-y-[2px]"
                   />
                 </TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Symbol</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Strategy</TableHead>
-                <TableHead>Pair ID</TableHead>
+                <SortableTableHead 
+                  sortKey="date" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                >
+                  Date
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="symbol" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                >
+                  Symbol
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="action" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                >
+                  Action
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="quantity" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                  className="text-right"
+                >
+                  Qty
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="price" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                  className="text-right"
+                >
+                  Price
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="amount" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                  className="text-right"
+                >
+                  Amount
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="strategy_name" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                >
+                  Strategy
+                </SortableTableHead>
+                <SortableTableHead 
+                  sortKey="pair_id" 
+                  currentSortKey={sortKey} 
+                  currentSortDirection={sortDirection} 
+                  onSort={handleSort}
+                >
+                  Pair ID
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -273,14 +428,14 @@ export default function TradeHistory() {
                     <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
-              ) : filteredTrades?.length === 0 ? (
+              ) : sortedTrades.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                     No trades found. Import some data to get started.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredTrades?.map((trade) => (
+                sortedTrades.map((trade) => (
                   <TableRow key={trade.id} className={trade.pair_id ? "bg-primary/5" : ""}>
                     <TableCell>
                       <Checkbox

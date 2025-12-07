@@ -295,6 +295,16 @@ export default function TradeHistory() {
   const allSelected = filteredTrades && selectedTrades.length > 0 && selectedTrades.length === filteredTrades.length;
   const indeterminate = selectedTrades.length > 0 && selectedTrades.length < (filteredTrades?.length || 0);
 
+  // Helper function for currency formatting
+  const formatCurrency = (value: number, decimals: number = 2) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -460,11 +470,13 @@ export default function TradeHistory() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">{trade.quantity}</TableCell>
-                    <TableCell className="text-right">${Number(trade.price / trade.multiplier).toFixed(4)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(trade.price / trade.multiplier, 2)}
+                    </TableCell>
                     <TableCell className={`text-right font-bold ${
                       Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"
                     }`}>
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(trade.amount)}
+                      {formatCurrency(trade.amount, 2)}
                     </TableCell>
                     <TableCell className="min-w-[200px]">
                       <Select 

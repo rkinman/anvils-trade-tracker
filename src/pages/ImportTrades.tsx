@@ -83,7 +83,7 @@ export default function ImportTrades() {
       
       if (fetchError) throw fetchError;
 
-      const updates: { id: string; mark_price: number | null; unrealized_pnl: number | null }[] = [];
+      const updates: { id: string; mark_price: number | null }[] = [];
       const matchedTradeIds = new Set<string>();
 
       // 3. Match Logic
@@ -94,24 +94,23 @@ export default function ImportTrades() {
         if (position) {
           updates.push({ 
             id: trade.id, 
-            mark_price: position.mark,
-            unrealized_pnl: position.pnl 
+            mark_price: position.mark
+            // Removed unrealized_pnl as it is a generated column
           });
           matchedTradeIds.add(trade.id);
         }
       }
       
       // 4. Ghost Logic (Clear missing positions)
-      const tradesToClear = openTrades.filter(t => !matchedTradeIds.has(t.id) && (t.mark_price !== null || t.unrealized_pnl !== null));
+      const tradesToClear = openTrades.filter(t => !matchedTradeIds.has(t.id) && (t.mark_price !== null));
       for (const trade of tradesToClear) {
         updates.push({ 
           id: trade.id, 
-          mark_price: null,
-          unrealized_pnl: null 
+          mark_price: null
         });
       }
 
-      // 5. Sequential Update Execution (Fix for 400 Bad Request)
+      // 5. Sequential Update Execution
       if (updates.length > 0) {
         let successCount = 0;
         let failCount = 0;
@@ -121,8 +120,7 @@ export default function ImportTrades() {
             const { error } = await supabase
               .from('trades')
               .update({ 
-                mark_price: update.mark_price,
-                unrealized_pnl: update.unrealized_pnl 
+                mark_price: update.mark_price
               })
               .eq('id', update.id);
             
@@ -231,7 +229,7 @@ export default function ImportTrades() {
             <Alert className="mt-6" variant="default">
               <Info className="h-4 w-4" /><AlertTitle>Snapshot Logic</AlertTitle>
               <AlertDescription>
-                This upload acts as a <strong>snapshot</strong>. If an open trade in your database is <strong>not</strong> found in this CSV, its P&L and Mark Price will be cleared (set to null), as the system assumes the position is now closed.
+                This upload acts as a <strong>snapshot</strong>. If an open trade in your database is <strong>not</strong> found in this CSV, its Mark Price will be cleared (set to null), as the system assumes the position is now closed.
               </AlertDescription>
             </Alert>
           </CardContent>

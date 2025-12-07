@@ -12,30 +12,20 @@ import Strategies from "./pages/Strategies";
 import StrategyDetail from "./pages/StrategyDetail";
 import TradeHistory from "./pages/TradeHistory";
 import Settings from "./pages/Settings";
-import { useEffect, useState } from "react";
-import { supabase } from "./integrations/supabase/client";
+import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<boolean | null>(null);
+  const { session, loading } = useAuth();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(!!session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(!!session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  if (session === null) {
-    return null; // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   if (!session) {
@@ -47,66 +37,68 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="dark" storageKey="trade-tracker-theme">
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/import"
-              element={
-                <ProtectedRoute>
-                  <ImportTrades />
-                </ProtectedRoute>
-              }
-            />
-             <Route
-              path="/strategies"
-              element={
-                <ProtectedRoute>
-                  <Strategies />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/strategies/:strategyId"
-              element={
-                <ProtectedRoute>
-                  <StrategyDetail />
-                </ProtectedRoute>
-              }
-            />
-             <Route
-              path="/history"
-              element={
-                <ProtectedRoute>
-                  <TradeHistory />
-                </ProtectedRoute>
-              }
-            />
-             <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider defaultTheme="dark" storageKey="trade-tracker-theme">
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Index />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/import"
+                element={
+                  <ProtectedRoute>
+                    <ImportTrades />
+                  </ProtectedRoute>
+                }
+              />
+               <Route
+                path="/strategies"
+                element={
+                  <ProtectedRoute>
+                    <Strategies />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/strategies/:strategyId"
+                element={
+                  <ProtectedRoute>
+                    <StrategyDetail />
+                  </ProtectedRoute>
+                }
+              />
+               <Route
+                path="/history"
+                element={
+                  <ProtectedRoute>
+                    <TradeHistory />
+                  </ProtectedRoute>
+                }
+              />
+               <Route
+                path="/settings"
+                element={
+                  <ProtectedRoute>
+                    <Settings />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

@@ -103,19 +103,26 @@ export default function Strategies() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {strategiesWithTags?.map((strategy) => {
-              const isPositive = strategy.realized_pnl >= 0;
+              const isTotalPositive = strategy.total_pnl >= 0;
+              const unrealizedPnl = strategy.total_pnl - strategy.realized_pnl;
               return (
                 <Card key={strategy.id} className="flex flex-col">
                   <CardHeader className="pb-4">
                     <div className="flex justify-between items-start">
                       <div><CardTitle className="text-lg">{strategy.name}</CardTitle><CardDescription className="line-clamp-1 mt-1">{strategy.description || "No description"}</CardDescription></div>
-                      {isPositive ? <TrendingUp className="h-5 w-5 text-green-500" /> : <TrendingDown className="h-5 w-5 text-red-500" />}
+                      {isTotalPositive ? <TrendingUp className="h-5 w-5 text-green-500" /> : <TrendingDown className="h-5 w-5 text-red-500" />}
                     </div>
                   </CardHeader>
                   <CardContent className="pb-4 flex-1">
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Overall Realized P&L</p>
-                      <p className={`text-2xl font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(strategy.realized_pnl)}</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-xs text-muted-foreground">Total P&L (Unrealized)</p>
+                            <p className={`text-2xl font-bold ${isTotalPositive ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(strategy.total_pnl)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground">Realized P&L</p>
+                            <p className="text-lg font-semibold">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(strategy.realized_pnl)}</p>
+                        </div>
                     </div>
                     {strategy.dashboard_tags && strategy.dashboard_tags.length > 0 && (
                       <>
@@ -124,7 +131,7 @@ export default function Strategies() {
                           {strategy.dashboard_tags.map(tag => (
                             <div key={tag.tag_id} className="flex justify-between items-center">
                               <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-muted-foreground" /><span className="text-sm font-medium">{tag.tag_name}</span></div>
-                              <span className={`text-sm font-bold ${tag.realized_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tag.realized_pnl)}</span>
+                              <span className={`text-sm font-bold ${tag.total_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tag.total_pnl)}</span>
                             </div>
                           ))}
                         </div>
@@ -132,7 +139,7 @@ export default function Strategies() {
                     )}
                   </CardContent>
                   <CardFooter className="pt-4 border-t flex justify-between items-center">
-                    <Badge variant="secondary">{strategy.trade_count} Trades</Badge>
+                    <Badge variant="secondary">{strategy.trade_count} Closed Trades</Badge>
                     <div className="flex gap-2">
                       <Button asChild variant="outline" size="sm"><Link to={`/strategies/${strategy.id}`}><Eye className="mr-2 h-4 w-4" /> View</Link></Button>
                       <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => { if(confirm('Are you sure?')) { deleteMutation.mutate(strategy.id); }}}><Trash2 className="h-4 w-4" /></Button>

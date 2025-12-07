@@ -8,7 +8,8 @@ import {
   Menu,
   X,
   History,
-  Settings
+  Settings,
+  CandlestickChart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
@@ -60,6 +61,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: PieChart, label: "Strategies", path: "/strategies" },
     { icon: Upload, label: "Import Trades", path: "/import" },
+    { icon: CandlestickChart, label: "Positions", path: "/positions" },
     { icon: History, label: "Trade History", path: "/history" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];

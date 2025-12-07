@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import { format, parse } from 'date-fns';
 
 // Helper to create a simple hash for duplicate detection
 export const generateImportHash = (row: any): string => {
@@ -19,6 +20,35 @@ export const generateImportHash = (row: any): string => {
   }
   return hash.toString(16);
 };
+
+// Parses tastytrade trade history symbols into a standardized format.
+// Example Input: 'SPY 12/18/26 C670' -> Output: 'SPY:2026-12-18:670.00:C'
+export const parseSymbolToCanonical = (symbol: string, type: string): string => {
+  if (type !== 'OPTION' && type !== 'FUTURES_OPTION') {
+    return symbol.trim();
+  }
+  
+  const parts = symbol.trim().split(/\s+/);
+  if (parts.length < 3) return symbol.trim();
+
+  try {
+    const underlying = parts[0];
+    const dateStr = parts[1];
+    const optionPart = parts[2];
+
+    const expDate = parse(dateStr, 'MM/dd/yy', new Date());
+    const formattedDate = format(expDate, 'yyyy-MM-dd');
+    
+    const callPut = optionPart.charAt(0).toUpperCase();
+    const strike = parseFloat(optionPart.substring(1));
+
+    return `${underlying}:${formattedDate}:${strike.toFixed(2)}:${callPut}`;
+  } catch (e) {
+    console.warn(`Could not parse trade symbol: ${symbol}`);
+    return symbol.trim();
+  }
+};
+
 
 export interface ParsedTrade {
   symbol: string;

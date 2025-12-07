@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Info } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Info, TrendingUp } from "lucide-react";
 import { parseTradeCSV } from "@/utils/csvParser";
 import { parsePositionsCSV } from "@/utils/positionsCsvParser";
 import { parseSymbolToCanonical as parseTradeSymbol } from "@/utils/csvParser";
@@ -19,7 +19,7 @@ export default function ImportTrades() {
 
   // State for Position Imports
   const [positionLoading, setPositionLoading] = useState(false);
-  const [positionStats, setPositionStats] = useState<{ matched: number; unmatched: number } | null>(null);
+  const [positionStats, setPositionStats] = useState<{ matched: number; unmatched: number; updated: number } | null>(null);
   const positionFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTradeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,8 +70,12 @@ export default function ImportTrades() {
     setPositionStats(null);
 
     try {
+      console.log("📊 Starting position upload...");
+      
       // 1. Parse the "Snapshot" CSV
       const parsedPositions = await parsePositionsCSV(file);
+      console.log(`✅ Parsed ${parsedPositions.length} positions from CSV`);
+      
       const positionsMap = new Map(parsedPositions.map(p => [p.canonicalSymbol, p]));
 
       // 2. Fetch all currently "Open" trades from the database ledger
@@ -82,27 +86,36 @@ export default function ImportTrades() {
         .like('action', '%OPEN%');
       
       if (fetchError) throw fetchError;
+      console.log(`📋 Found ${openTrades?.length || 0} open trades in database`);
 
       const updates: { id: string; mark_price: number | null }[] = [];
       const matchedTradeIds = new Set<string>();
+      let matchCount = 0;
 
-      // 3. Match Logic
-      for (const trade of openTrades) {
+      // 3. Match Logic - Match open trades with positions
+      for (const trade of openTrades || []) {
         const tradeCanonical = parseTradeSymbol(trade.symbol, trade.asset_type);
         const position = positionsMap.get(tradeCanonical);
         
+        console.log(`🔍 Checking trade: ${trade.symbol} (${tradeCanonical})`);
+        
         if (position) {
+          console.log(`✅ MATCH FOUND! Mark: $${position.mark}`);
           updates.push({ 
             id: trade.id, 
             mark_price: position.mark
-            // Removed unrealized_pnl as it is a generated column
           });
           matchedTradeIds.add(trade.id);
+          matchCount++;
+        } else {
+          console.log(`❌ No position found for ${tradeCanonical}`);
         }
       }
       
       // 4. Ghost Logic (Clear missing positions)
-      const tradesToClear = openTrades.filter(t => !matchedTradeIds.has(t.id) && (t.mark_price !== null));
+      const tradesToClear = (openTrades || []).filter(t => !matchedTradeIds.has(t.id) && (t.mark_price !== null));
+      console.log(`🧹 Clearing ${tradesToClear.length} positions no longer in snapshot`);
+      
       for (const trade of tradesToClear) {
         updates.push({ 
           id: trade.id, 
@@ -110,7 +123,9 @@ export default function ImportTrades() {
         });
       }
 
-      // 5. Sequential Update Execution
+      // 5. Execute Updates
+      console.log(`💾 Executing ${updates.length} database updates...`);
+      
       if (updates.length > 0) {
         let successCount = 0;
         let failCount = 0;
@@ -125,7 +140,7 @@ export default function ImportTrades() {
               .eq('id', update.id);
             
             if (error) {
-                console.error("Update failed for ID:", update.id, error);
+                console.error("❌ Update failed for ID:", update.id, error);
                 failCount++;
                 if (!firstError) firstError = error;
             } else {
@@ -133,18 +148,23 @@ export default function ImportTrades() {
             }
         }
 
+        console.log(`✅ Successfully updated ${successCount} trades`);
+        
         if (failCount > 0) {
-            console.error("First update error:", firstError);
-            throw new Error(`Failed to update ${failCount} positions. Check console for details. Error: ${firstError?.message}`);
+            console.error("⚠️ Failed updates:", failCount);
+            throw new Error(`Failed to update ${failCount} positions. First error: ${firstError?.message}`);
         }
       }
 
-      const matchedCount = matchedTradeIds.size;
-      setPositionStats({ matched: matchedCount, unmatched: openTrades.length - matchedCount });
-      showSuccess(`Updated ${matchedCount} positions. Cleared ${openTrades.length - matchedCount} missing positions.`);
+      const unmatchedCount = (openTrades?.length || 0) - matchCount;
+      setPositionStats({ matched: matchCount, unmatched: unmatchedCount, updated: updates.length });
+      
+      showSuccess(`✅ Updated ${matchCount} positions. Cleared ${tradesToClear.length} closed positions.`);
+      
+      console.log("🎉 Position upload complete!");
 
     } catch (error: any) {
-      console.error("Full error object:", error);
+      console.error("💥 Position upload error:", error);
       showError(error.message || "Failed to process positions file.");
     } finally {
       setPositionLoading(false);
@@ -204,7 +224,7 @@ export default function ImportTrades() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl hover:bg-muted/50 transition-colors">
-              <div className="mb-4 p-4 bg-primary/10 rounded-full"><Upload className="h-8 w-8 text-primary" /></div>
+              <div className="mb-4 p-4 bg-primary/10 rounded-full"><TrendingUp className="h-8 w-8 text-primary" /></div>
               <h3 className="text-lg font-medium mb-2">Upload Positions</h3>
               <p className="text-sm text-muted-foreground mb-6">Select your positions.csv file.</p>
               <Input ref={positionFileInputRef} id="positions-upload" type="file" accept=".csv" className="hidden" onChange={handlePositionUpload} disabled={positionLoading} />
@@ -218,18 +238,24 @@ export default function ImportTrades() {
               <div className="mt-6 grid gap-4">
                 <Alert><CheckCircle className="h-4 w-4" /><AlertTitle>Processing Complete</AlertTitle>
                   <AlertDescription>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li><strong>{positionStats.matched}</strong> positions matched and updated.</li>
-                      <li><strong>{positionStats.unmatched}</strong> positions not found in file (cleared).</li>
+                    <ul className="list-disc list-inside space-y-1 mt-2">
+                      <li><strong>{positionStats.matched}</strong> positions matched and updated with current prices.</li>
+                      <li><strong>{positionStats.unmatched}</strong> open trades not found in snapshot (may be closed).</li>
+                      <li><strong>{positionStats.updated}</strong> total database updates performed.</li>
                     </ul>
                   </AlertDescription>
                 </Alert>
               </div>
             )}
             <Alert className="mt-6" variant="default">
-              <Info className="h-4 w-4" /><AlertTitle>Snapshot Logic</AlertTitle>
+              <Info className="h-4 w-4" /><AlertTitle>How It Works</AlertTitle>
               <AlertDescription>
-                This upload acts as a <strong>snapshot</strong>. If an open trade in your database is <strong>not</strong> found in this CSV, its Mark Price will be cleared (set to null), as the system assumes the position is now closed.
+                This upload acts as a <strong>snapshot</strong> of your current positions. The system will:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Match positions by symbol and update their current market prices</li>
+                  <li>Calculate unrealized P&L automatically</li>
+                  <li>Clear mark prices for positions no longer in the snapshot</li>
+                </ul>
               </AlertDescription>
             </Alert>
           </CardContent>

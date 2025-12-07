@@ -7,7 +7,26 @@ export interface ParsedPosition {
   type: 'STOCK' | 'OPTION' | 'FUTURES_OPTION';
   quantity: number;
   mark: number;
+  pnl: number | null;
 }
+
+// Helper to sanitize and parse currency strings like "$1.23" or "($45.67)"
+const sanitizeCurrency = (value: string | undefined): number => {
+  if (!value) return 0;
+  let sanitized = value.toString().trim();
+  
+  const isNegative = sanitized.startsWith('(') && sanitized.endsWith(')');
+  
+  // Remove non-numeric characters except for the decimal point and minus sign.
+  // This will strip commas, quotes, dollar signs etc.
+  sanitized = sanitized.replace(/[^0-9.-]+/g, "");
+  
+  let number = parseFloat(sanitized);
+  
+  if (isNaN(number)) return 0;
+  
+  return isNegative ? -Math.abs(number) : number;
+};
 
 // Parses complex option symbols from tastytrade into a standardized, comparable format.
 // Example Input: 'SPY   261218P00670000' -> Output: 'SPY:2026-12-18:670:P'
@@ -42,11 +61,6 @@ export const parseSymbolToCanonical = (symbol: string, type: string): string => 
   }
 };
 
-const sanitizeCurrency = (value: string | undefined): number => {
-  if (!value) return 0;
-  return parseFloat(value.replace(/[^0-9.-]+/g, ""));
-};
-
 export const parsePositionsCSV = (file: File): Promise<ParsedPosition[]> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
@@ -55,15 +69,22 @@ export const parsePositionsCSV = (file: File): Promise<ParsedPosition[]> => {
       complete: (results) => {
         try {
           const positions: ParsedPosition[] = (results.data as any[])
-            .filter(row => row.Symbol && row.Type)
+            .filter(row => row.Symbol)
             .map((row: any) => {
-              const type = row.Type.toUpperCase();
+              const type = row.Type?.toUpperCase() || 'STOCK';
+              
+              // Handle various CSV headers for P&L and Mark
+              const pnlRaw = row['P/L Open'] || row['Profit/Loss'] || row['Unrealized P&L'];
+              const markRaw = row['Mark'] || row['Market Value'] || row['Current Price'];
+              const qtyRaw = row['Quantity'] || row['Qty'];
+
               return {
                 canonicalSymbol: parseSymbolToCanonical(row.Symbol, type),
                 symbol: row.Symbol,
                 type,
-                quantity: parseInt(row.Quantity.replace(/,/g, ''), 10),
-                mark: sanitizeCurrency(row.Mark),
+                quantity: sanitizeCurrency(qtyRaw), // Use sanitizeCurrency here too for consistency
+                mark: sanitizeCurrency(markRaw),
+                pnl: pnlRaw ? sanitizeCurrency(pnlRaw) : null
               };
             });
           resolve(positions);

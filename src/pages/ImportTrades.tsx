@@ -70,34 +70,62 @@ export default function ImportTrades() {
     setPositionStats(null);
 
     try {
+      // 1. Parse the "Snapshot" CSV
       const parsedPositions = await parsePositionsCSV(file);
       const positionsMap = new Map(parsedPositions.map(p => [p.canonicalSymbol, p]));
 
-      const { data: openTrades, error: fetchError } = await supabase.from('trades').select('*').is('pair_id', null).like('action', '%OPEN%');
+      // 2. Fetch all currently "Open" trades from the database ledger
+      // We look for trades that aren't paired (custom logic) or have OPEN in the action
+      const { data: openTrades, error: fetchError } = await supabase
+        .from('trades')
+        .select('*')
+        .is('pair_id', null)
+        .like('action', '%OPEN%');
+      
       if (fetchError) throw fetchError;
 
-      const updates: { id: string; mark_price: number | null }[] = [];
+      const updates: { id: string; mark_price: number | null; unrealized_pnl: number | null }[] = [];
       const matchedTradeIds = new Set<string>();
 
+      // 3. Match Logic
       for (const trade of openTrades) {
+        // We use the trade history parser here to generate the key from the DB data
         const tradeCanonical = parseTradeSymbol(trade.symbol, trade.asset_type);
+        
         const position = positionsMap.get(tradeCanonical);
+        
         if (position) {
-          updates.push({ id: trade.id, mark_price: position.mark });
+          // Found match: Update with live data from CSV
+          updates.push({ 
+            id: trade.id, 
+            mark_price: position.mark,
+            unrealized_pnl: position.pnl 
+          });
           matchedTradeIds.add(trade.id);
         }
       }
       
-      const tradesToClear = openTrades.filter(t => !matchedTradeIds.has(t.id) && t.mark_price !== null);
+      // 4. Ghost Logic (Snapshot approach)
+      // Any trade we thought was open, but is NOT in the new file, is assumed closed/gone.
+      // We clear its live metrics.
+      const tradesToClear = openTrades.filter(t => !matchedTradeIds.has(t.id) && (t.mark_price !== null || t.unrealized_pnl !== null));
       for (const trade of tradesToClear) {
-        updates.push({ id: trade.id, mark_price: null });
+        updates.push({ 
+          id: trade.id, 
+          mark_price: null,
+          unrealized_pnl: null 
+        });
       }
 
+      // 5. Batch Update
       if (updates.length > 0) {
         const updatePromises = updates.map(update =>
           supabase
             .from('trades')
-            .update({ mark_price: update.mark_price })
+            .update({ 
+              mark_price: update.mark_price,
+              unrealized_pnl: update.unrealized_pnl 
+            })
             .eq('id', update.id)
         );
         
@@ -112,7 +140,7 @@ export default function ImportTrades() {
 
       const matchedCount = matchedTradeIds.size;
       setPositionStats({ matched: matchedCount, unmatched: openTrades.length - matchedCount });
-      showSuccess(`Successfully updated ${matchedCount} open positions.`);
+      showSuccess(`Updated ${matchedCount} positions. Cleared ${openTrades.length - matchedCount} missing positions.`);
 
     } catch (error: any) {
       console.error(error);
@@ -137,7 +165,7 @@ export default function ImportTrades() {
             <CardDescription>Supports standard broker formats. Duplicates are automatically detected and skipped.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl">
+            <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl hover:bg-muted/50 transition-colors">
               <div className="mb-4 p-4 bg-primary/10 rounded-full"><Upload className="h-8 w-8 text-primary" /></div>
               <h3 className="text-lg font-medium mb-2">Upload Transactions</h3>
               <p className="text-sm text-muted-foreground mb-6">Select your transactions.csv file.</p>
@@ -171,10 +199,10 @@ export default function ImportTrades() {
         <Card>
           <CardHeader>
             <CardTitle>Update Open Positions</CardTitle>
-            <CardDescription>Upload your open positions CSV to calculate unrealized P&L.</CardDescription>
+            <CardDescription>Upload your open positions CSV (Snapshot) to sync P&L.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl">
+            <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl hover:bg-muted/50 transition-colors">
               <div className="mb-4 p-4 bg-primary/10 rounded-full"><Upload className="h-8 w-8 text-primary" /></div>
               <h3 className="text-lg font-medium mb-2">Upload Positions</h3>
               <p className="text-sm text-muted-foreground mb-6">Select your positions.csv file.</p>
@@ -189,15 +217,19 @@ export default function ImportTrades() {
               <div className="mt-6 grid gap-4">
                 <Alert><CheckCircle className="h-4 w-4" /><AlertTitle>Processing Complete</AlertTitle>
                   <AlertDescription>
-                    <p>{positionStats.matched} open positions were updated with the latest market prices.</p>
-                    <p>{positionStats.unmatched} previously open positions were not in the file and are now considered closed.</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li><strong>{positionStats.matched}</strong> positions matched and updated.</li>
+                      <li><strong>{positionStats.unmatched}</strong> positions not found in file (cleared).</li>
+                    </ul>
                   </AlertDescription>
                 </Alert>
               </div>
             )}
             <Alert className="mt-6" variant="default">
-              <Info className="h-4 w-4" /><AlertTitle>How it Works</AlertTitle>
-              <AlertDescription>Any open trade in your history that is NOT in the uploaded positions file will have its unrealized P&L reset to zero, as it's assumed to be closed.</AlertDescription>
+              <Info className="h-4 w-4" /><AlertTitle>Snapshot Logic</AlertTitle>
+              <AlertDescription>
+                This upload acts as a <strong>snapshot</strong>. If an open trade in your database is <strong>not</strong> found in this CSV, its P&L and Mark Price will be cleared (set to null), as the system assumes the position is now closed.
+              </AlertDescription>
             </Alert>
           </CardContent>
         </Card>

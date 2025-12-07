@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown, Tag, EyeOff, Eye, Trash2 } from "lucide-react";
+import { Search, Loader2, Link as LinkIcon, Unlink, ArrowUp, ArrowDown, ArrowUpDown, Tag, EyeOff, Eye, Trash2, X } from "lucide-react";
 import { format } from "date-fns";
 import { showSuccess, showError } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -382,7 +382,7 @@ export default function TradeHistory() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="space-y-6">
+      <div className="space-y-6 pb-24"> {/* Add padding to bottom to avoid overlap with floating bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Trade History</h2>
@@ -405,60 +405,6 @@ export default function TradeHistory() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          {selectedTrades.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary">
-                  Bulk Actions ({selectedTrades.length})
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Visibility</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={handleBulkHide} disabled={updateHiddenStatusMutation.isPending}>
-                    <EyeOff className="mr-2 h-4 w-4" /> Hide Selected
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleBulkUnhide} disabled={updateHiddenStatusMutation.isPending}>
-                    <Eye className="mr-2 h-4 w-4" /> Unhide Selected
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Pairing</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={handleBulkPair} disabled={pairTradesMutation.isPending}>
-                    <LinkIcon className="mr-2 h-4 w-4" /> Pair Selected
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleBulkUnpair} disabled={unpairTradesMutation.isPending}>
-                    <Unlink className="mr-2 h-4 w-4" /> Unpair Selected
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Assign Strategy</DropdownMenuLabel>
-                  <div className="p-2">
-                    <Select onValueChange={handleBulkStrategyChange} disabled={bulkUpdateStrategyMutation.isPending || !strategies}>
-                      <SelectTrigger className="w-full h-8">
-                        <SelectValue placeholder="Select Strategy" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-muted-foreground">
-                          <Tag className="mr-2 h-4 w-4 inline-block" /> Unassign
-                        </SelectItem>
-                        {strategies?.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setTradesToDelete(selectedTrades)} className="text-destructive focus:text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete Selected
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
 
         <div className="space-y-8">
@@ -535,6 +481,74 @@ export default function TradeHistory() {
           )}
         </div>
       </div>
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedTrades.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-3 flex items-center justify-between gap-4 animate-in slide-in-from-bottom-5 duration-300">
+            <span className="text-sm font-medium text-foreground whitespace-nowrap">
+              {selectedTrades.length} trade(s) selected
+            </span>
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button>
+                    Bulk Actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Visibility</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={handleBulkHide} disabled={updateHiddenStatusMutation.isPending}>
+                      <EyeOff className="mr-2 h-4 w-4" /> Hide Selected
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleBulkUnhide} disabled={updateHiddenStatusMutation.isPending}>
+                      <Eye className="mr-2 h-4 w-4" /> Unhide Selected
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Pairing</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={handleBulkPair} disabled={pairTradesMutation.isPending}>
+                      <LinkIcon className="mr-2 h-4 w-4" /> Pair Selected
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleBulkUnpair} disabled={unpairTradesMutation.isPending}>
+                      <Unlink className="mr-2 h-4 w-4" /> Unpair Selected
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Assign Strategy</DropdownMenuLabel>
+                    <div className="p-2">
+                      <Select onValueChange={handleBulkStrategyChange} disabled={bulkUpdateStrategyMutation.isPending || !strategies}>
+                        <SelectTrigger className="w-full h-8">
+                          <SelectValue placeholder="Select Strategy" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" className="text-muted-foreground">
+                            <Tag className="mr-2 h-4 w-4 inline-block" /> Unassign
+                          </SelectItem>
+                          {strategies?.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setTradesToDelete(selectedTrades)} className="text-destructive focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete Selected
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedTrades([])} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+                <span className="sr-only">Clear selection</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

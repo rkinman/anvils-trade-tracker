@@ -330,6 +330,37 @@ export default function TradeHistory() {
     return sorted;
   }, [filteredTrades, sortKey, sortDirection]);
 
+  // --- Grouping Logic ---
+  const groupedTrades = useMemo(() => {
+    if (!sortedTrades) return {};
+
+    const groups: Record<string, { name: string; trades: Trade[] }> = {};
+
+    for (const trade of sortedTrades) {
+      const strategyId = trade.strategy_id || 'unassigned';
+      const strategyName = trade.strategies?.name || 'Unassigned Trades';
+
+      if (!groups[strategyId]) {
+        groups[strategyId] = { name: strategyName, trades: [] };
+      }
+      groups[strategyId].trades.push(trade);
+    }
+
+    // Order the groups: 'unassigned' first, then by strategy name
+    const orderedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === 'unassigned') return -1;
+      if (b === 'unassigned') return 1;
+      return groups[a].name.localeCompare(groups[b].name);
+    });
+
+    const orderedGroups: Record<string, { name: string; trades: Trade[] }> = {};
+    for (const key of orderedKeys) {
+      orderedGroups[key] = groups[key];
+    }
+
+    return orderedGroups;
+  }, [sortedTrades]);
+
 
   const allSelected = filteredTrades && selectedTrades.length > 0 && selectedTrades.length === filteredTrades.length;
   const indeterminate = selectedTrades.length > 0 && selectedTrades.length < (filteredTrades?.length || 0);
@@ -471,7 +502,7 @@ export default function TradeHistory() {
                   className="text-right"
                 >
                   Price
-                </SortableTableHead>
+                </TableHead>
                 <SortableTableHead 
                   sortKey="amount" 
                   currentSortKey={sortKey} 
@@ -480,7 +511,7 @@ export default function TradeHistory() {
                   className="text-right"
                 >
                   Amount
-                </SortableTableHead>
+                </TableHead>
                 <SortableTableHead 
                   sortKey="strategy_name" 
                   currentSortKey={sortKey} 
@@ -488,7 +519,7 @@ export default function TradeHistory() {
                   onSort={handleSort}
                 >
                   Strategy
-                </SortableTableHead>
+                </TableHead>
                 <SortableTableHead 
                   sortKey="pair_id" 
                   currentSortKey={sortKey} 
@@ -496,7 +527,7 @@ export default function TradeHistory() {
                   onSort={handleSort}
                 >
                   Pair ID
-                </SortableTableHead>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -513,70 +544,79 @@ export default function TradeHistory() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedTrades.map((trade) => (
-                  <TableRow key={trade.id} className={trade.pair_id ? "bg-primary/5" : ""}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedTrades.includes(trade.id)}
-                        onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)}
-                        aria-label={`Select trade ${trade.id}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium min-w-[120px]">
-                      {format(new Date(trade.date), 'MMM d, yyyy')}
-                    </TableCell>
-                    <TableCell>
-                       <Badge variant="outline" className="font-mono">
-                         {trade.symbol}
-                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className={
-                        trade.action.includes('BUY') ? "text-red-400" : "text-green-400"
-                      }>
-                        {trade.action}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">{trade.quantity}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(trade.price / trade.multiplier, 2)}
-                    </TableCell>
-                    <TableCell className={`text-right font-bold ${
-                      Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"
-                    }`}>
-                      {formatCurrency(trade.amount, 2)}
-                    </TableCell>
-                    <TableCell className="min-w-[200px]">
-                      <Select 
-                        defaultValue={trade.strategy_id || "none"} 
-                        onValueChange={(val) => handleStrategyChange(trade.id, val)}
-                        disabled={updateStrategyMutation.isPending}
-                      >
-                        <SelectTrigger className="w-full h-8">
-                          <SelectValue placeholder="Assign Strategy" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none" className="text-muted-foreground">
-                            Unassigned
-                          </SelectItem>
-                          {strategies?.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate">
-                      {trade.pair_id ? (
-                        <Badge variant="secondary" className="font-mono">
-                          {trade.pair_id.substring(0, 8)}...
-                        </Badge>
-                      ) : (
-                        "N/A"
-                      )}
-                    </TableCell>
-                  </TableRow>
+                Object.entries(groupedTrades).map(([strategyId, group]) => (
+                  <>
+                    <TableRow key={strategyId} className="bg-muted/50 hover:bg-muted/50 border-y border-border/50">
+                      <TableCell colSpan={9} className="py-2 font-semibold text-primary/80">
+                        {group.name} ({group.trades.length} trades)
+                      </TableCell>
+                    </TableRow>
+                    {group.trades.map((trade) => (
+                      <TableRow key={trade.id} className={trade.pair_id ? "bg-primary/5" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedTrades.includes(trade.id)}
+                            onCheckedChange={(checked) => handleSelectTrade(trade.id, !!checked)}
+                            aria-label={`Select trade ${trade.id}`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium min-w-[120px]">
+                          {format(new Date(trade.date), 'MMM d, yyyy')}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-mono">
+                            {trade.symbol}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className={
+                            trade.action.includes('BUY') ? "text-red-400" : "text-green-400"
+                          }>
+                            {trade.action}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">{trade.quantity}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(trade.price / trade.multiplier, 2)}
+                        </TableCell>
+                        <TableCell className={`text-right font-bold ${
+                          Number(trade.amount) >= 0 ? "text-green-500" : "text-red-500"
+                        }`}>
+                          {formatCurrency(trade.amount, 2)}
+                        </TableCell>
+                        <TableCell className="min-w-[200px]">
+                          <Select 
+                            defaultValue={trade.strategy_id || "none"} 
+                            onValueChange={(val) => handleStrategyChange(trade.id, val)}
+                            disabled={updateStrategyMutation.isPending}
+                          >
+                            <SelectTrigger className="w-full h-8">
+                              <SelectValue placeholder="Assign Strategy" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none" className="text-muted-foreground">
+                                Unassigned
+                              </SelectItem>
+                              {strategies?.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate">
+                          {trade.pair_id ? (
+                            <Badge variant="secondary" className="font-mono">
+                              {trade.pair_id.substring(0, 8)}...
+                            </Badge>
+                          ) : (
+                            "N/A"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
                 ))
               )}
             </TableBody>

@@ -30,33 +30,32 @@ const Index = () => {
 
       // Calculate Metrics
       trades.forEach(trade => {
-        // Recalculate Amount Logic
-        const actionUpper = trade.action.toUpperCase();
-        const isSell = actionUpper.includes('SELL') || actionUpper.includes('SHORT');
-        const sign = isSell ? 1 : -1;
+        const amount = Number(trade.amount);
         
-        const grossAmount = trade.price * trade.quantity * trade.multiplier * sign;
-        const netAmount = grossAmount - (trade.fees || 0);
-
+        // Handle Open Positions (Unrealized P&L)
         if (trade.mark_price !== null) {
-          // Open Logic
-          const cleanMarkPrice = Math.abs(Number(trade.mark_price));
-          const posSign = isSell ? -1 : 1;
+          const mark = Math.abs(Number(trade.mark_price));
+          const qty = Number(trade.quantity);
+          const mult = Number(trade.multiplier);
           
-          const marketValue = cleanMarkPrice * trade.quantity * trade.multiplier * posSign;
-          const tradeUnrealized = marketValue + netAmount;
+          // Sign Logic: Short (Sell) = -1, Long (Buy) = +1
+          const isShort = trade.action.toUpperCase().includes('SELL') || trade.action.toUpperCase().includes('SHORT');
+          const sign = isShort ? -1 : 1;
           
-          totalPnL += tradeUnrealized;
-          unrealizedPnL += tradeUnrealized;
+          const marketValue = mark * qty * mult * sign;
+          
+          // For open trades, P&L = Current Value + Cost Basis (Amount)
+          totalPnL += (marketValue + amount);
+          unrealizedPnL += (marketValue + amount);
         } else {
           // Closed Logic
-          totalPnL += netAmount;
-          realizedPnL += netAmount;
+          totalPnL += amount;
+          realizedPnL += amount;
 
-          if (actionUpper.includes('CLOSE') || actionUpper.includes('EXP')) {
+          if (trade.action.toUpperCase().includes('CLOSE') || trade.action.toUpperCase().includes('EXP')) {
              closeCount++;
-             if (netAmount > 0) winCount++;
-             else if (netAmount < 0) lossCount++;
+             if (amount > 0) winCount++;
+             else if (amount < 0) lossCount++;
           }
         }
       });

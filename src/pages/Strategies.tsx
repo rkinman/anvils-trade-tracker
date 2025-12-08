@@ -63,7 +63,7 @@ export default function Strategies() {
         .select('*');
       if (stratError) throw stratError;
 
-      // 2. Fetch All Trades
+      // 2. Fetch All Trades (needed for accurate aggregation)
       const { data: tradesData, error: tradesError } = await supabase
         .from('trades')
         .select('*');
@@ -86,34 +86,37 @@ export default function Strategies() {
         let loss_count = 0;
 
         stratTrades.forEach(trade => {
-            // Recalculate Amount Logic
-            const actionUpper = trade.action.toUpperCase();
-            const isSell = actionUpper.includes('SELL') || actionUpper.includes('SHORT');
-            const sign = isSell ? 1 : -1;
+            const amount = Number(trade.amount);
             
-            const grossAmount = trade.price * trade.quantity * trade.multiplier * sign;
-            const netAmount = grossAmount - (trade.fees || 0);
-
-            // Open Position Logic
+            // Market Value Calculation
+            let marketValue = 0;
             if (trade.mark_price !== null) {
-                const cleanMarkPrice = Math.abs(Number(trade.mark_price));
-                const posSign = isSell ? -1 : 1;
+                const mark = Math.abs(Number(trade.mark_price));
+                const qty = Number(trade.quantity);
+                const mult = Number(trade.multiplier);
                 
-                const marketValue = cleanMarkPrice * trade.quantity * trade.multiplier * posSign;
-                const tradeUnrealized = marketValue + netAmount;
+                // Determine sign: Long = +1, Short = -1
+                // Standard logic: Buy adds positive asset value, Sell adds negative liability value
+                const isShort = trade.action.toUpperCase().includes('SELL') || trade.action.toUpperCase().includes('SHORT');
+                const sign = isShort ? -1 : 1;
                 
+                marketValue = mark * qty * mult * sign;
+                
+                // Unrealized P&L for this specific trade = Current Value + Cost (Amount is usually negative for buys)
+                const tradeUnrealized = marketValue + amount;
                 unrealized_pnl += tradeUnrealized;
-                total_pnl += tradeUnrealized;
             } else {
-                // Closed Position Logic
-                realized_pnl += netAmount;
-                total_pnl += netAmount;
+                // If no mark price, it's considered closed/realized
+                realized_pnl += amount;
                 
-                // Estimate Win/Loss
-                if (netAmount > 0) win_count++;
-                if (netAmount < 0) loss_count++;
+                // Estimate Win/Loss on realized trades
+                if (amount > 0) win_count++;
+                if (amount < 0) loss_count++;
             }
         });
+
+        // Total P&L = Realized + Unrealized
+        total_pnl = realized_pnl + unrealized_pnl;
 
         const strategyTags = dashboardTagsData?.filter(t => t.strategy_id === strategy.id) || [];
 

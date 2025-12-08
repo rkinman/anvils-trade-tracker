@@ -5,7 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Plus, Trash2, TrendingUp, Eye, Target, MoreHorizontal, Archive, RefreshCw, Pencil, DollarSign, Clock, Percent } from "lucide-react";
+import { Plus, Trash2, TrendingUp, Eye, Target, MoreHorizontal, Archive, RefreshCw, Pencil, DollarSign, Clock, Percent, AlertCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +34,7 @@ interface Strategy {
   description: string | null;
   capital_allocation: number;
   status: 'active' | 'closed';
-  start_date: string;
+  start_date: string | null;
   is_hidden: boolean;
   total_pnl: number;
   realized_pnl: number;
@@ -54,102 +54,133 @@ export default function Strategies() {
   
   const queryClient = useQueryClient();
 
-  // Fetch strategies and perform calculations client-side for accuracy
-  const { data: strategies, isLoading: strategiesLoading } = useQuery({
+  // Fetch strategies with robust error handling
+  const { data: strategies, isLoading: strategiesLoading, error: strategiesError } = useQuery({
     queryKey: ['strategies-calculated'],
     queryFn: async () => {
-      // 1. Fetch Strategies
-      const { data: strategiesData, error: stratError } = await supabase
-        .from('strategies')
-        .select('*');
-      if (stratError) throw stratError;
-
-      // 2. Fetch All Trades (needed for accurate aggregation)
-      const { data: tradesData, error: tradesError } = await supabase
-        .from('trades')
-        .select('*');
-      if (tradesError) throw tradesError;
-
-      // 3. Fetch Dashboard Tags
-      const { data: dashboardTagsData } = await supabase
-        .from('tag_performance')
-        .select('*')
-        .eq('show_on_dashboard', true);
-
-      // 4. Calculate Metrics per Strategy
-      const calculatedStrategies = strategiesData.map(strategy => {
-        const stratTrades = tradesData.filter(t => t.strategy_id === strategy.id && !t.hidden);
+      try {
+        // 1. Fetch Strategies
+        const { data: strategiesData, error: stratError } = await supabase
+          .from('strategies')
+          .select('*');
         
-        let total_pnl = 0;
-        let realized_pnl = 0;
-        let unrealized_pnl = 0;
-        let win_count = 0;
-        let loss_count = 0;
-        let days_in_trade = 0;
-
-        // Calculate Days in Trade
-        if (stratTrades.length > 0) {
-            const dates = stratTrades.map(t => new Date(t.date).getTime());
-            const minDate = Math.min(...dates);
-            
-            // If active, calc to Today. If closed, calc to last trade date.
-            const endDate = strategy.status === 'closed' ? Math.max(...dates) : Date.now();
-            
-            const diffTime = Math.max(0, endDate - minDate);
-            days_in_trade = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            // Ensure at least 1 day if it started today
-            if (days_in_trade === 0) days_in_trade = 1;
+        if (stratError) {
+          console.error("Error fetching strategies:", stratError);
+          throw stratError;
         }
 
-        stratTrades.forEach(trade => {
-            const amount = Number(trade.amount);
-            
-            // Market Value Calculation
-            let marketValue = 0;
-            if (trade.mark_price !== null) {
-                const mark = Math.abs(Number(trade.mark_price));
-                const qty = Number(trade.quantity);
-                const mult = Number(trade.multiplier);
-                
-                const isShort = trade.action.toUpperCase().includes('SELL') || trade.action.toUpperCase().includes('SHORT');
-                const sign = isShort ? -1 : 1;
-                
-                marketValue = mark * qty * mult * sign;
-                
-                const tradeUnrealized = marketValue + amount;
-                unrealizedPnL += tradeUnrealized;
-            } else {
-                realized_pnl += amount;
-                
-                if (amount > 0) win_count++;
-                if (amount < 0) loss_count++;
-            }
+        if (!strategiesData || strategiesData.length === 0) {
+          return [];
+        }
+
+        // 2. Fetch All Trades (needed for accurate aggregation)
+        // We only fetch fields we absolutely need to keep it lighter
+        const { data: tradesData, error: tradesError } = await supabase
+          .from('trades')
+          .select('id, strategy_id, amount, date, mark_price, quantity, multiplier, action, hidden');
+        
+        if (tradesError) {
+          console.error("Error fetching trades for calculation:", tradesError);
+          // Don't crash, just proceed with empty trades if this fails (unlikely)
+        }
+
+        const safeTrades = tradesData || [];
+
+        // 3. Try Fetch Dashboard Tags (fail silently if view doesn't exist)
+        let dashboardTagsData: any[] = [];
+        try {
+          const { data, error } = await supabase
+            .from('tag_performance')
+            .select('*')
+            .eq('show_on_dashboard', true);
+          
+          if (!error && data) {
+            dashboardTagsData = data;
+          }
+        } catch (err) {
+          console.warn("Could not fetch tag_performance, skipping tags section.", err);
+        }
+
+        // 4. Calculate Metrics per Strategy
+        const calculatedStrategies = strategiesData.map(strategy => {
+          // Robust filtering
+          const stratTrades = safeTrades.filter(t => t.strategy_id === strategy.id && !t.hidden);
+          
+          let total_pnl = 0;
+          let realized_pnl = 0;
+          let unrealized_pnl = 0;
+          let win_count = 0;
+          let loss_count = 0;
+          let days_in_trade = 0;
+
+          // Calculate Days in Trade
+          if (stratTrades.length > 0) {
+              const dates = stratTrades
+                .map(t => t.date ? new Date(t.date).getTime() : NaN)
+                .filter(d => !isNaN(d));
+              
+              if (dates.length > 0) {
+                const minDate = Math.min(...dates);
+                // If active, calc to Today. If closed, calc to last trade date.
+                const endDate = strategy.status === 'closed' ? Math.max(...dates) : Date.now();
+                const diffTime = Math.max(0, endDate - minDate);
+                days_in_trade = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (days_in_trade === 0) days_in_trade = 1;
+              }
+          }
+
+          stratTrades.forEach(trade => {
+              const amount = Number(trade.amount) || 0;
+              
+              // Market Value Calculation
+              let marketValue = 0;
+              if (trade.mark_price !== null && trade.mark_price !== undefined) {
+                  const mark = Math.abs(Number(trade.mark_price));
+                  const qty = Number(trade.quantity) || 0;
+                  const mult = Number(trade.multiplier) || 1; // Default to 1 if missing
+                  
+                  const actionStr = trade.action ? trade.action.toUpperCase() : '';
+                  const isShort = actionStr.includes('SELL') || actionStr.includes('SHORT');
+                  const sign = isShort ? -1 : 1;
+                  
+                  marketValue = mark * qty * mult * sign;
+                  
+                  const tradeUnrealized = marketValue + amount;
+                  unrealizedPnL += tradeUnrealized;
+              } else {
+                  realized_pnl += amount;
+                  if (amount > 0) win_count++;
+                  if (amount < 0) loss_count++;
+              }
+          });
+
+          // Total P&L = Realized + Unrealized
+          total_pnl = realized_pnl + unrealized_pnl;
+
+          const strategyTags = dashboardTagsData.filter(t => t.strategy_id === strategy.id);
+
+          return {
+            ...strategy,
+            capital_allocation: Number(strategy.capital_allocation) || 0,
+            status: strategy.status || 'active',
+            start_date: strategy.start_date,
+            is_hidden: strategy.is_hidden || false,
+            total_pnl,
+            realized_pnl,
+            unrealized_pnl,
+            trade_count: stratTrades.length,
+            win_count,
+            loss_count,
+            days_in_trade,
+            dashboard_tags: strategyTags
+          };
         });
 
-        // Total P&L = Realized + Unrealized
-        total_pnl = realized_pnl + unrealized_pnl;
-
-        const strategyTags = dashboardTagsData?.filter(t => t.strategy_id === strategy.id) || [];
-
-        return {
-          ...strategy,
-          capital_allocation: strategy.capital_allocation || 0,
-          status: strategy.status || 'active',
-          start_date: strategy.start_date,
-          is_hidden: strategy.is_hidden || false,
-          total_pnl,
-          realized_pnl,
-          unrealized_pnl,
-          trade_count: stratTrades.length,
-          win_count,
-          loss_count,
-          days_in_trade,
-          dashboard_tags: strategyTags
-        };
-      });
-
-      return calculatedStrategies.sort((a, b) => b.total_pnl - a.total_pnl) as Strategy[];
+        return calculatedStrategies.sort((a, b) => b.total_pnl - a.total_pnl) as Strategy[];
+      } catch (err) {
+        console.error("CRITICAL ERROR in Strategies queryFn:", err);
+        throw err;
+      }
     }
   });
 
@@ -440,6 +471,16 @@ export default function Strategies() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {strategiesError && (
+          <div className="p-4 border border-destructive/50 rounded-lg bg-destructive/10 text-destructive flex items-center gap-3">
+             <AlertCircle className="h-5 w-5" />
+             <div>
+               <h3 className="font-semibold">Error Loading Strategies</h3>
+               <p className="text-sm">Please refresh the page. If this persists, there may be a database connection issue.</p>
+             </div>
+          </div>
+        )}
 
         {strategiesLoading ? (
           <div className="text-center py-12">

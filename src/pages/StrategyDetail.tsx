@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { showSuccess, showError } from "@/utils/toast";
-import { Loader2, Save, Plus, ArrowLeft, Search, Tag, Trash2, ChevronDown, ChevronRight, Calculator, Link as LinkIcon, ArrowUp, ArrowDown, ArrowUpDown, BarChart3 } from "lucide-react";
+import { Loader2, Save, Plus, ArrowLeft, Search, Tag, Trash2, ChevronDown, ChevronRight, Calculator, Link as LinkIcon, ArrowUp, ArrowDown, ArrowUpDown, BarChart3, X } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -109,6 +109,7 @@ export default function StrategyDetail() {
   const queryClient = useQueryClient();
   const [isAddTradesOpen, setIsAddTradesOpen] = useState(false);
   const [selectedUnassigned, setSelectedUnassigned] = useState<string[]>([]);
+  const [selectedTradesForTagging, setSelectedTradesForTagging] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [newTagName, setNewTagName] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -248,6 +249,20 @@ export default function StrategyDetail() {
     onError: (err) => showError(err.message)
   });
 
+  const bulkUpdateTagMutation = useMutation({
+    mutationFn: async ({ tradeIds, tagId }: { tradeIds: string[], tagId: string | null }) => {
+      const { error } = await supabase.from('trades').update({ tag_id: tagId }).in('id', tradeIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
+      queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      showSuccess(`Updated tags for ${selectedTradesForTagging.length} trades`);
+      setSelectedTradesForTagging([]);
+    },
+    onError: (err) => showError(err.message)
+  });
+
   // --- HANDLERS ---
   const handleSave = () => updateStrategyMutation.mutate(formState);
   const handleAddSelected = () => assignTradesMutation.mutate(selectedUnassigned);
@@ -257,6 +272,25 @@ export default function StrategyDetail() {
 
   const handleTradeTagChange = (tradeId: string, tagId: string) => {
     updateTradeTagMutation.mutate({ tradeId, tagId: tagId === "none" ? null : tagId });
+  };
+
+  const handleSelectTradeGroup = (tradeIds: string[], checked: boolean) => {
+    setSelectedTradesForTagging(prev => {
+      const currentSet = new Set(prev);
+      if (checked) {
+        tradeIds.forEach(id => currentSet.add(id));
+      } else {
+        tradeIds.forEach(id => currentSet.delete(id));
+      }
+      return Array.from(currentSet);
+    });
+  };
+
+  const handleBulkTagChange = (tagId: string) => {
+    bulkUpdateTagMutation.mutate({ 
+      tradeIds: selectedTradesForTagging, 
+      tagId: tagId === "none" ? null : tagId 
+    });
   };
 
   const handleSort = (key: SortKey) => {
@@ -571,7 +605,12 @@ export default function StrategyDetail() {
           <CardContent>
             {assignedTradesLoading ? <Loader2 className="h-6 w-6 animate-spin mx-auto mt-10" /> : (
               <div className="space-y-8">
-                {Object.entries(groupedTradesByTag).map(([tagId, tagGroup]) => (
+                {Object.entries(groupedTradesByTag).map(([tagId, tagGroup]) => {
+                  const allIdsInTagGroup = tagGroup.trades.flatMap(g => g.trades.map(t => t.id));
+                  const allSelected = allIdsInTagGroup.length > 0 && allIdsInTagGroup.every(id => selectedTradesForTagging.includes(id));
+                  const someSelected = allIdsInTagGroup.some(id => selectedTradesForTagging.includes(id));
+
+                  return (
                   <div key={tagId}>
                     <h3 className="text-xl font-semibold mb-3 text-primary/90 flex items-center gap-2">
                       <Tag className="h-5 w-5" />
@@ -581,6 +620,12 @@ export default function StrategyDetail() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
+                            <TableHead className="w-[40px]">
+                              <Checkbox 
+                                checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
+                                onCheckedChange={(checked) => handleSelectTradeGroup(allIdsInTagGroup, !!checked)}
+                              />
+                            </TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                             <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
                             <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Structure / Symbol</SortableTableHead>
@@ -594,6 +639,9 @@ export default function StrategyDetail() {
                         <TableBody>
                           {tagGroup.trades.map(group => {
                             const isExpanded = expandedGroups.has(group.id);
+                            const groupTradeIds = group.trades.map(t => t.id);
+                            const isGroupSelected = groupTradeIds.every(id => selectedTradesForTagging.includes(id));
+                            const isGroupPartiallySelected = !isGroupSelected && groupTradeIds.some(id => selectedTradesForTagging.includes(id));
                             
                             // Return array of rows
                             const rows = [];
@@ -607,6 +655,12 @@ export default function StrategyDetail() {
                                 )}
                                 onClick={() => toggleGroup(group.id)}
                               >
+                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox 
+                                    checked={isGroupSelected ? true : (isGroupPartiallySelected ? 'indeterminate' : false)}
+                                    onCheckedChange={(checked) => handleSelectTradeGroup(groupTradeIds, !!checked)}
+                                  />
+                                </TableCell>
                                 <TableCell className="text-center">
                                   {group.isPair ? (
                                     isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
@@ -636,7 +690,7 @@ export default function StrategyDetail() {
                                 <TableCell className={cn("text-right font-bold", group.summary.totalPnl >= 0 ? "text-green-500" : "text-red-500")}>
                                     {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(group.summary.totalPnl)}
                                 </TableCell>
-                                <TableCell className="min-w-[200px]">
+                                <TableCell className="min-w-[200px]" onClick={(e) => e.stopPropagation()}>
                                   <Select 
                                     defaultValue={group.trades[0]?.tag_id || "none"} 
                                     onValueChange={(val) => {
@@ -663,7 +717,7 @@ export default function StrategyDetail() {
                             if (isExpanded) {
                               rows.push(
                                 <TableRow key={`${group.id}-details`} className="bg-muted/5 hover:bg-muted/5">
-                                  <TableCell colSpan={8} className="p-0">
+                                  <TableCell colSpan={9} className="p-0">
                                     <div className="border-t border-b bg-muted/10 py-2">
                                       <Table>
                                         <TableHeader>
@@ -719,7 +773,7 @@ export default function StrategyDetail() {
                           })}
                           {tagGroup.trades.length === 0 && (
                               <TableRow>
-                                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                                       No trades in this tag yet.
                                   </TableCell>
                               </TableRow>
@@ -728,7 +782,8 @@ export default function StrategyDetail() {
                       </Table>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {Object.keys(groupedTradesByTag).length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     No trades assigned to this strategy yet.
@@ -738,6 +793,33 @@ export default function StrategyDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Floating Bulk Actions Bar */}
+        {selectedTradesForTagging.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+            <div className="bg-card border border-border rounded-xl shadow-2xl p-3 flex items-center justify-between gap-4 animate-in slide-in-from-bottom-5 duration-300">
+              <span className="text-sm font-medium text-foreground whitespace-nowrap">
+                {selectedTradesForTagging.length} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <Select onValueChange={handleBulkTagChange} disabled={bulkUpdateTagMutation.isPending}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Assign Tag" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Tag</SelectItem>
+                    {tags?.map((tag) => (
+                      <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="ghost" size="icon" onClick={() => setSelectedTradesForTagging([])}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

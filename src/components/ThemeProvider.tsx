@@ -19,7 +19,8 @@ type Theme =
   | "nord"
   | "luxury"
   | "pastel"
-  | "legend";
+  | "legend"
+  | "christmas";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -55,7 +56,7 @@ export function ThemeProvider({
     root.classList.remove(
       "light", "dark", "cyberpunk", "neon", "deep-space",
       "sunset", "forest", "ocean", "midnight", "terminal", "dracula",
-      "tron", "tasty", "aurora", "coffee", "nord", "luxury", "pastel", "legend"
+      "tron", "tasty", "aurora", "coffee", "nord", "luxury", "pastel", "legend", "christmas"
     );
 
     // Add new theme class
@@ -63,6 +64,13 @@ export function ThemeProvider({
     
     // Also handle the data-theme attribute for CSS variable switching
     root.setAttribute("data-theme", theme);
+
+    // Handle body class specifically for christmas pattern
+    if (theme === 'christmas') {
+      document.body.classList.add('christmas');
+    } else {
+      document.body.classList.remove('christmas');
+    }
 
     localStorage.setItem(storageKey, theme);
   }, [theme, storageKey]);

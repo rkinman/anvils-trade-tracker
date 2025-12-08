@@ -1,7 +1,7 @@
 import { 
   Moon, Sun, Monitor, Zap, Disc, 
   Sunset, Trees, Waves, Star, Terminal, Ghost,
-  Cpu, CandlestickChart, Wind, Coffee, Snowflake, Crown, Palette, Sparkles
+  Cpu, CandlestickChart, Wind, Coffee, Snowflake, Crown, Palette, Sparkles, Gift
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ export function ThemeToggle() {
           {theme === 'luxury' && <Crown className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'pastel' && <Palette className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'legend' && <Sparkles className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'christmas' && <Gift className="h-[1.2rem] w-[1.2rem]" />}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -71,6 +72,10 @@ export function ThemeToggle() {
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
+
+          <DropdownMenuItem onClick={() => setTheme("christmas")}>
+            <Gift className="mr-2 h-4 w-4" /> Christmas
+          </DropdownMenuItem>
           
           <DropdownMenuItem onClick={() => setTheme("cyberpunk")}>
             <Zap className="mr-2 h-4 w-4" /> Cyberpunk

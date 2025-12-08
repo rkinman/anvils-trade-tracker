@@ -438,6 +438,37 @@
     --input: 0 0% 20%;
     --ring: 121 100% 39%;
   }
+
+  /* Christmas Theme */
+  .christmas {
+    --background: 160 30% 5%; /* Very dark green */
+    --foreground: 0 0% 95%; /* Snow white */
+    --card: 160 30% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 160 30% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 350 80% 55%; /* Festive Red */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 140 60% 30%; /* Pine Green */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 160 20% 15%;
+    --muted-foreground: 160 20% 65%;
+    --accent: 45 90% 50%; /* Gold ornaments */
+    --accent-foreground: 0 0% 5%;
+    --destructive: 0 90% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 160 30% 20%;
+    --input: 160 30% 20%;
+    --ring: 350 80% 55%;
+  }
+  
+  body.christmas {
+    background-image: 
+      radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px, 30px 30px;
+    background-position: 0 0, 25px 25px;
+  }
 }
 
 @layer base {

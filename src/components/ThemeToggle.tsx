@@ -1,7 +1,7 @@
 import { 
   Moon, Sun, Monitor, Zap, Disc, 
   Sunset, Trees, Waves, Star, Terminal, Ghost,
-  Cpu, CandlestickChart
+  Cpu, CandlestickChart, Wind, Coffee, Snowflake, Crown, Palette
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,11 @@ export function ThemeToggle() {
           {theme === 'dracula' && <Ghost className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'tron' && <Cpu className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'tasty' && <CandlestickChart className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'aurora' && <Wind className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'coffee' && <Coffee className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'nord' && <Snowflake className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'luxury' && <Crown className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'pastel' && <Palette className="h-[1.2rem] w-[1.2rem]" />}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -47,6 +52,9 @@ export function ThemeToggle() {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setTheme("dark")}>
             <Moon className="mr-2 h-4 w-4" /> Dark
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("pastel")}>
+            <Palette className="mr-2 h-4 w-4" /> Soft Pastel
           </DropdownMenuItem>
           
           <DropdownMenuSeparator />
@@ -70,6 +78,21 @@ export function ThemeToggle() {
             <Monitor className="mr-2 h-4 w-4" /> Deep Space
           </DropdownMenuItem>
           
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem onClick={() => setTheme("luxury")}>
+            <Crown className="mr-2 h-4 w-4" /> Luxury Gold
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("nord")}>
+            <Snowflake className="mr-2 h-4 w-4" /> Nord
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("aurora")}>
+            <Wind className="mr-2 h-4 w-4" /> Aurora
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("coffee")}>
+            <Coffee className="mr-2 h-4 w-4" /> Coffee Shop
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
 
           <DropdownMenuItem onClick={() => setTheme("sunset")}>

@@ -13,7 +13,12 @@ type Theme =
   | "terminal"
   | "dracula"
   | "tron"
-  | "tasty";
+  | "tasty"
+  | "aurora"
+  | "coffee"
+  | "nord"
+  | "luxury"
+  | "pastel";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -49,7 +54,7 @@ export function ThemeProvider({
     root.classList.remove(
       "light", "dark", "cyberpunk", "neon", "deep-space",
       "sunset", "forest", "ocean", "midnight", "terminal", "dracula",
-      "tron", "tasty"
+      "tron", "tasty", "aurora", "coffee", "nord", "luxury", "pastel"
     );
 
     // Add new theme class

@@ -209,7 +209,7 @@
     --ring: 250 80% 65%;
   }
 
-  /* Terminal Theme (Matrix-like) */
+  /* Terminal Theme */
   .terminal {
     --background: 120 10% 5%; /* Very dark green/black */
     --foreground: 120 100% 60%; /* Bright Terminal Green */
@@ -299,6 +299,121 @@
     --border: 0 0% 25%;
     --input: 0 0% 20%;
     --ring: 0 71% 42%;
+  }
+
+  /* Aurora Theme */
+  .aurora {
+    --background: 215 28% 17%; /* Dark Blue-Grey */
+    --foreground: 160 100% 75%; /* Bright Mint */
+    --card: 215 28% 23%;
+    --card-foreground: 160 100% 75%;
+    --popover: 215 28% 23%;
+    --popover-foreground: 160 100% 75%;
+    --primary: 150 100% 45%; /* Green */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 260 50% 60%; /* Soft Purple */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 215 20% 30%;
+    --muted-foreground: 215 20% 70%;
+    --accent: 260 50% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 30% 30%;
+    --input: 215 30% 30%;
+    --ring: 150 100% 45%;
+  }
+
+  /* Coffee Theme */
+  .coffee {
+    --background: 30 15% 12%; /* Dark Bean */
+    --foreground: 35 30% 85%; /* Foam */
+    --card: 30 15% 16%;
+    --card-foreground: 35 30% 85%;
+    --popover: 30 15% 16%;
+    --popover-foreground: 35 30% 85%;
+    --primary: 35 60% 50%; /* Caramel */
+    --primary-foreground: 30 15% 12%;
+    --secondary: 25 20% 30%; /* Mocha */
+    --secondary-foreground: 35 30% 85%;
+    --muted: 30 10% 25%;
+    --muted-foreground: 30 10% 65%;
+    --accent: 35 60% 50%;
+    --accent-foreground: 30 15% 12%;
+    --destructive: 0 60% 40%;
+    --destructive-foreground: 35 30% 85%;
+    --border: 30 15% 25%;
+    --input: 30 15% 25%;
+    --ring: 35 60% 50%;
+  }
+
+  /* Nord Theme */
+  .nord {
+    --background: 220 16% 22%; /* Polar Night #2E3440 */
+    --foreground: 218 27% 92%; /* Snow Storm #ECEFF4 */
+    --card: 222 16% 28%; /* Polar Night lighter #3B4252 */
+    --card-foreground: 218 27% 92%;
+    --popover: 222 16% 28%;
+    --popover-foreground: 218 27% 92%;
+    --primary: 193 43% 67%; /* Frost Cyan #88C0D0 */
+    --primary-foreground: 220 16% 22%;
+    --secondary: 213 32% 52%; /* Frost Blue #81A1C1 */
+    --secondary-foreground: 218 27% 92%;
+    --muted: 220 16% 36%; /* #4C566A */
+    --muted-foreground: 218 27% 80%;
+    --accent: 213 32% 52%;
+    --accent-foreground: 218 27% 92%;
+    --destructive: 354 42% 56%; /* Aurora Red #BF616A */
+    --destructive-foreground: 218 27% 92%;
+    --border: 220 16% 36%;
+    --input: 220 16% 36%;
+    --ring: 193 43% 67%;
+  }
+
+  /* Luxury Theme */
+  .luxury {
+    --background: 0 0% 5%; /* Almost Black */
+    --foreground: 45 30% 90%; /* Pale Gold */
+    --card: 0 0% 8%;
+    --card-foreground: 45 30% 90%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 45 30% 90%;
+    --primary: 45 60% 50%; /* Gold */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 45 30% 90%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 45 60% 50%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 60% 40%;
+    --destructive-foreground: 45 30% 90%;
+    --border: 45 30% 25%;
+    --input: 45 30% 25%;
+    --ring: 45 60% 50%;
+  }
+
+  /* Soft Pastel Theme */
+  .pastel {
+    --background: 210 20% 98%; /* Off white */
+    --foreground: 220 10% 30%; /* Dark grey */
+    --card: 0 0% 100%;
+    --card-foreground: 220 10% 30%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 10% 30%;
+    --primary: 340 60% 85%; /* Pastel Pink */
+    --primary-foreground: 220 10% 30%;
+    --secondary: 200 60% 85%; /* Pastel Blue */
+    --secondary-foreground: 220 10% 30%;
+    --muted: 210 20% 94%;
+    --muted-foreground: 220 10% 50%;
+    --accent: 200 60% 85%;
+    --accent-foreground: 220 10% 30%;
+    --destructive: 0 60% 85%;
+    --destructive-foreground: 220 10% 30%;
+    --border: 220 10% 90%;
+    --input: 220 10% 90%;
+    --ring: 340 60% 85%;
   }
 }
 

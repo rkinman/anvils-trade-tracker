@@ -1,6 +1,17 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "dark" | "light" | "cyberpunk" | "neon" | "deep-space";
+type Theme = 
+  | "dark" 
+  | "light" 
+  | "cyberpunk" 
+  | "neon" 
+  | "deep-space"
+  | "sunset"
+  | "forest"
+  | "ocean"
+  | "midnight"
+  | "terminal"
+  | "dracula";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -33,7 +44,10 @@ export function ThemeProvider({
     const root = window.document.documentElement;
 
     // Remove old theme classes
-    root.classList.remove("light", "dark", "cyberpunk", "neon", "deep-space");
+    root.classList.remove(
+      "light", "dark", "cyberpunk", "neon", "deep-space",
+      "sunset", "forest", "ocean", "midnight", "terminal", "dracula"
+    );
 
     // Add new theme class
     root.classList.add(theme);

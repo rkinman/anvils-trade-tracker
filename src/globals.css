@@ -116,6 +116,144 @@
     --input: 217 33% 20%;
     --ring: 252 87% 67%;
   }
+
+  /* Sunset Theme */
+  .sunset {
+    --background: 12 25% 12%;
+    --foreground: 20 80% 95%;
+    --card: 15 25% 18%;
+    --card-foreground: 20 80% 95%;
+    --popover: 15 25% 18%;
+    --popover-foreground: 20 80% 95%;
+    --primary: 20 90% 60%; /* Orange */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 320 60% 30%; /* Deep Pink/Purple */
+    --secondary-foreground: 20 80% 95%;
+    --muted: 15 20% 25%;
+    --muted-foreground: 15 20% 70%;
+    --accent: 320 60% 30%;
+    --accent-foreground: 20 80% 95%;
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 15 30% 30%;
+    --input: 15 30% 30%;
+    --ring: 20 90% 60%;
+  }
+
+  /* Forest Theme */
+  .forest {
+    --background: 140 30% 10%;
+    --foreground: 140 20% 95%;
+    --card: 140 25% 15%;
+    --card-foreground: 140 20% 95%;
+    --popover: 140 25% 15%;
+    --popover-foreground: 140 20% 95%;
+    --primary: 142 60% 45%; /* Forest Green */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 80 40% 25%; /* Olive/Moss */
+    --secondary-foreground: 140 20% 95%;
+    --muted: 140 20% 20%;
+    --muted-foreground: 140 15% 65%;
+    --accent: 80 40% 25%;
+    --accent-foreground: 140 20% 95%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 140 30% 25%;
+    --input: 140 30% 25%;
+    --ring: 142 60% 45%;
+  }
+
+  /* Ocean Theme */
+  .ocean {
+    --background: 200 40% 10%;
+    --foreground: 200 20% 95%;
+    --card: 200 35% 15%;
+    --card-foreground: 200 20% 95%;
+    --popover: 200 35% 15%;
+    --popover-foreground: 200 20% 95%;
+    --primary: 190 90% 50%; /* Teal/Cyan */
+    --primary-foreground: 200 40% 10%;
+    --secondary: 220 50% 30%; /* Deep Blue */
+    --secondary-foreground: 200 20% 95%;
+    --muted: 200 30% 20%;
+    --muted-foreground: 200 20% 65%;
+    --accent: 220 50% 30%;
+    --accent-foreground: 200 20% 95%;
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 200 40% 25%;
+    --input: 200 40% 25%;
+    --ring: 190 90% 50%;
+  }
+
+  /* Midnight Theme */
+  .midnight {
+    --background: 230 40% 8%;
+    --foreground: 230 20% 95%;
+    --card: 230 35% 12%;
+    --card-foreground: 230 20% 95%;
+    --popover: 230 35% 12%;
+    --popover-foreground: 230 20% 95%;
+    --primary: 250 80% 65%; /* Indigo */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 230 30% 20%;
+    --secondary-foreground: 230 20% 95%;
+    --muted: 230 30% 18%;
+    --muted-foreground: 230 15% 65%;
+    --accent: 230 30% 20%;
+    --accent-foreground: 230 20% 95%;
+    --destructive: 350 70% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 35% 20%;
+    --input: 230 35% 20%;
+    --ring: 250 80% 65%;
+  }
+
+  /* Terminal Theme (Matrix-like) */
+  .terminal {
+    --background: 120 10% 5%; /* Very dark green/black */
+    --foreground: 120 100% 60%; /* Bright Terminal Green */
+    --card: 120 10% 10%;
+    --card-foreground: 120 100% 60%;
+    --popover: 120 10% 10%;
+    --popover-foreground: 120 100% 60%;
+    --primary: 120 100% 50%; /* Classic Green */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 120 30% 20%;
+    --secondary-foreground: 120 100% 60%;
+    --muted: 120 20% 15%;
+    --muted-foreground: 120 60% 40%;
+    --accent: 120 30% 20%;
+    --accent-foreground: 120 100% 60%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 120 100% 95%;
+    --border: 120 50% 30%;
+    --input: 120 50% 30%;
+    --ring: 120 100% 50%;
+  }
+
+  /* Dracula Inspired */
+  .dracula {
+    --background: 231 15% 18%; /* #282a36 */
+    --foreground: 60 30% 96%; /* #f8f8f2 */
+    --card: 232 14% 25%; /* #44475a */
+    --card-foreground: 60 30% 96%;
+    --popover: 232 14% 25%;
+    --popover-foreground: 60 30% 96%;
+    --primary: 326 100% 74%; /* Pink #ff79c6 */
+    --primary-foreground: 231 15% 18%;
+    --secondary: 265 89% 78%; /* Purple #bd93f9 */
+    --secondary-foreground: 231 15% 18%;
+    --muted: 232 14% 31%; /* Comment color ish */
+    --muted-foreground: 231 10% 60%;
+    --accent: 191 97% 77%; /* Cyan #8be9fd */
+    --accent-foreground: 231 15% 18%;
+    --destructive: 0 100% 67%; /* Red #ff5555 */
+    --destructive-foreground: 60 30% 96%;
+    --border: 232 14% 40%;
+    --input: 232 14% 40%;
+    --ring: 326 100% 74%;
+  }
 }
 
 @layer base {

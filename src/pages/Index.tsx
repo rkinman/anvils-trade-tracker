@@ -28,31 +28,35 @@ const Index = () => {
       let lossCount = 0;
       let closeCount = 0;
 
-      // Calculate Metrics
-      trades.forEach(trade => {
-        // Use stored amount (Cash Flow)
+      // 2. Calculate Metrics & Prepare Chart Data
+      const chartTrades = trades.map(trade => {
         const amount = Number(trade.amount);
         const actionUpper = trade.action.toUpperCase();
+        
+        // Default to using the stored amount (Realized Cash Flow)
+        let chartValue = amount;
 
         if (trade.mark_price !== null) {
           // Open Position Logic (Unrealized)
-          // P&L = Market Value + Cash Flow
-          
           const cleanMarkPrice = Math.abs(Number(trade.mark_price));
           const qty = Number(trade.quantity);
           const mult = Number(trade.multiplier);
           
           // Determine Position Direction for Market Value
-          // Short (Sell to Open) = Negative Liability
-          // Long (Buy to Open) = Positive Asset
+          // Short (Sell to Open) = Negative Liability (-1)
+          // Long (Buy to Open) = Positive Asset (+1)
           const isShort = actionUpper.includes('SELL') || actionUpper.includes('SHORT');
           const posSign = isShort ? -1 : 1;
           
           const marketValue = cleanMarkPrice * qty * mult * posSign;
-          const tradeUnrealized = marketValue + amount;
+          const tradeUnrealized = marketValue + amount; // Current Value + Cost Basis
           
           totalPnL += tradeUnrealized;
           unrealizedPnL += tradeUnrealized;
+          
+          // For the chart, we use the Current P&L of this position
+          // effectively replacing the initial cost "dip" with the current profit/loss status
+          chartValue = tradeUnrealized;
         } else {
           // Closed Position Logic (Realized)
           totalPnL += amount;
@@ -65,6 +69,11 @@ const Index = () => {
              else if (amount < 0) lossCount++;
           }
         }
+
+        return {
+          ...trade,
+          amount: chartValue
+        };
       });
 
       const openCount = trades.filter(t => t.mark_price !== null).length;
@@ -72,10 +81,6 @@ const Index = () => {
       const winRate = closeCount > 0 
         ? Math.round((winCount / closeCount) * 100) 
         : 0;
-      
-      // Filter trades for the chart: Only show CLOSED trades (Realized P&L)
-      // Including open trades (cash flow) creates misleading charts (e.g. buying stock looks like a crash)
-      const realizedTrades = trades.filter(t => t.mark_price === null);
 
       return {
         totalPnL,
@@ -84,7 +89,7 @@ const Index = () => {
         activePositions: openCount,
         winRate,
         tradeCount: trades.length,
-        chartTrades: realizedTrades
+        chartTrades: chartTrades
       };
     }
   });
@@ -170,7 +175,7 @@ const Index = () => {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <Card className="col-span-4 lg:col-span-7">
             <CardHeader>
-              <CardTitle>Realized P&L Performance</CardTitle>
+              <CardTitle>Net Liquidity Performance</CardTitle>
             </CardHeader>
             <CardContent className="pl-0">
                <DashboardChart trades={stats?.chartTrades || []} />

@@ -1,6 +1,7 @@
 import { 
   Moon, Sun, Monitor, Zap, Disc, 
-  Sunset, Trees, Waves, Star, Terminal, Ghost 
+  Sunset, Trees, Waves, Star, Terminal, Ghost,
+  Cpu, CandlestickChart
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,8 @@ export function ThemeToggle() {
           {theme === 'midnight' && <Star className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'terminal' && <Terminal className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'dracula' && <Ghost className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'tron' && <Cpu className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'tasty' && <CandlestickChart className="h-[1.2rem] w-[1.2rem]" />}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -46,6 +49,15 @@ export function ThemeToggle() {
             <Moon className="mr-2 h-4 w-4" /> Dark
           </DropdownMenuItem>
           
+          <DropdownMenuSeparator />
+          
+          <DropdownMenuItem onClick={() => setTheme("tasty")}>
+            <CandlestickChart className="mr-2 h-4 w-4" /> Tastytrade
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("tron")}>
+            <Cpu className="mr-2 h-4 w-4" /> The Grid (TRON)
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
           
           <DropdownMenuItem onClick={() => setTheme("cyberpunk")}>

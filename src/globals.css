@@ -254,6 +254,52 @@
     --input: 232 14% 40%;
     --ring: 326 100% 74%;
   }
+
+  /* TRON (The Grid) */
+  .tron {
+    --background: 195 20% 5%; /* Very dark cyan/black */
+    --foreground: 195 80% 90%; /* Light cyan white */
+    --card: 195 20% 8%;
+    --card-foreground: 195 80% 90%;
+    --popover: 195 20% 8%;
+    --popover-foreground: 195 80% 90%;
+    --primary: 180 100% 50%; /* Pure Cyan Neon */
+    --primary-foreground: 195 20% 5%;
+    --secondary: 195 30% 15%;
+    --secondary-foreground: 180 100% 50%;
+    --muted: 195 30% 15%;
+    --muted-foreground: 180 60% 50%;
+    --accent: 35 100% 50%; /* Orange Neon (CLU) */
+    --accent-foreground: 195 20% 5%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 180 100% 20%; /* Dim cyan borders */
+    --input: 195 30% 15%;
+    --ring: 180 100% 50%;
+  }
+
+  /* Tastytrade Inspired */
+  .tasty {
+    --background: 0 0% 11%; /* #1c1c1c */
+    --foreground: 0 0% 90%;
+    --card: 0 0% 15%; /* #262626 */
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 0 71% 42%; /* Tasty Cherry Red #b61f20 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 25%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 25%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 20%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 25%;
+    --input: 0 0% 20%;
+    --ring: 0 71% 42%;
+  }
 }
 
 @layer base {

@@ -11,7 +11,9 @@ type Theme =
   | "ocean"
   | "midnight"
   | "terminal"
-  | "dracula";
+  | "dracula"
+  | "tron"
+  | "tasty";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -46,7 +48,8 @@ export function ThemeProvider({
     // Remove old theme classes
     root.classList.remove(
       "light", "dark", "cyberpunk", "neon", "deep-space",
-      "sunset", "forest", "ocean", "midnight", "terminal", "dracula"
+      "sunset", "forest", "ocean", "midnight", "terminal", "dracula",
+      "tron", "tasty"
     );
 
     // Add new theme class

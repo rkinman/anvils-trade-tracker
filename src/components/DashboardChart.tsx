@@ -8,7 +8,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 
 interface Trade {
@@ -17,41 +16,46 @@ interface Trade {
 }
 
 interface DashboardChartProps {
-  trades: Trade[];
+  trades?: Trade[];
+  data?: { date: string; value: number }[];
 }
 
-export function DashboardChart({ trades }: DashboardChartProps) {
+export function DashboardChart({ trades, data }: DashboardChartProps) {
   const chartData = useMemo(() => {
+    // If manual data is provided, sort it and use it
+    if (data && data.length > 0) {
+      return [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+    // Fallback to trade-based calculation if no manual data
     if (!trades || trades.length === 0) return [];
 
-    // Sort trades by date
     const sortedTrades = [...trades].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
 
-    // Calculate cumulative P&L
     let cumulative = 0;
-    const data = sortedTrades.map((trade) => {
+    return sortedTrades.map((trade) => {
       cumulative += Number(trade.amount);
       return {
         date: trade.date,
         value: cumulative,
       };
     });
-
-    // Simplify data points if too many (optional, but good for performance)
-    return data;
-  }, [trades]);
+  }, [trades, data]);
 
   if (chartData.length === 0) {
     return (
       <div className="flex h-[300px] items-center justify-center text-muted-foreground border border-dashed rounded-md bg-muted/5">
-        Import trades to see your P&L chart
+        No performance data available.
       </div>
     );
   }
 
-  const isPositive = chartData[chartData.length - 1]?.value >= 0;
+  // Determine color based on start vs end value
+  const startValue = chartData[0]?.value || 0;
+  const endValue = chartData[chartData.length - 1]?.value || 0;
+  const isPositive = endValue >= startValue;
 
   return (
     <div className="h-[300px] w-full">
@@ -86,6 +90,7 @@ export function DashboardChart({ trades }: DashboardChartProps) {
             fontSize={12}
             tickLine={false}
             axisLine={false}
+            domain={['auto', 'auto']}
             tickFormatter={(value) => `$${value}`}
           />
           <Tooltip
@@ -100,7 +105,7 @@ export function DashboardChart({ trades }: DashboardChartProps) {
                 style: "currency",
                 currency: "USD",
               }).format(value),
-              "Net P&L",
+              "Net Liquidity",
             ]}
           />
           <Area

@@ -212,6 +212,7 @@ export default function StrategyDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags', strategyId] });
       queryClient.invalidateQueries({ queryKey: ['dashboardTags'] });
+      queryClient.invalidateQueries({ queryKey: ['strategies-calculated'] });
     },
     onError: (err) => showError(err.message)
   });
@@ -222,6 +223,7 @@ export default function StrategyDetail() {
       queryClient.invalidateQueries({ queryKey: ['tags', strategyId] });
       queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
       queryClient.invalidateQueries({ queryKey: ['dashboardTags'] });
+      queryClient.invalidateQueries({ queryKey: ['strategies-calculated'] });
       showSuccess("Tag deleted");
     },
     onError: (err) => showError(err.message)
@@ -233,6 +235,7 @@ export default function StrategyDetail() {
       queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
       queryClient.invalidateQueries({ queryKey: ['unassignedTrades'] });
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['strategies-calculated'] });
       showSuccess(`Assigned ${tradeIds.length} trades`);
       setSelectedUnassigned([]);
       setIsAddTradesOpen(false);
@@ -248,6 +251,7 @@ export default function StrategyDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['strategies-calculated'] });
       showSuccess("Trade tag updated");
     },
     onError: (err) => showError(err.message)
@@ -261,6 +265,7 @@ export default function StrategyDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assignedTrades', strategyId] });
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
+      queryClient.invalidateQueries({ queryKey: ['strategies-calculated'] });
       showSuccess(`Updated tags for ${selectedTradesForTagging.length} trades`);
       setSelectedTradesForTagging([]);
     },
@@ -534,8 +539,94 @@ export default function StrategyDetail() {
           {strategy?.status === 'closed' && <Badge variant="secondary">Closed Strategy</Badge>}
         </div>
         
-        {/* ... (Existing Strategy and Tag Cards) ... */}
-        
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Strategy Info Card */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader><CardTitle>Strategy Details</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Strategy Name</Label>
+                    <Input id="name" value={formState.name} onChange={(e) => setFormState({ ...formState, name: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cap">Allocated Capital</Label>
+                    <div className="relative">
+                      <Calculator className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input id="cap" type="number" className="pl-9" value={formState.capital_allocation} onChange={(e) => setFormState({ ...formState, capital_allocation: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-2">
+                    <Label htmlFor="benchmark">Benchmark Ticker</Label>
+                     <div className="relative">
+                      <BarChart3 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input id="benchmark" className="pl-9" value={formState.benchmark_ticker} onChange={(e) => setFormState({ ...formState, benchmark_ticker: e.target.value.toUpperCase() })} />
+                     </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" value={formState.description} onChange={(e) => setFormState({ ...formState, description: e.target.value })} />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    id="status" 
+                    checked={formState.status === 'active'} 
+                    onCheckedChange={(checked) => setFormState({ ...formState, status: checked ? 'active' : 'closed' })} 
+                  />
+                  <Label htmlFor="status">Active Strategy</Label>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={handleSave} disabled={updateStrategyMutation.isPending}>
+                  <Save className="mr-2 h-4 w-4" />Save Changes
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+          
+          {/* Tags Card */}
+          <Card className="flex flex-col">
+            <CardHeader>
+              <CardTitle>Tags & KPIs</CardTitle>
+              <CardDescription>Tags marked "Show on Dashboard" act as sub-metrics.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1">
+              <div className="flex gap-2 mb-4">
+                <Input placeholder="New tag name..." value={newTagName} onChange={(e) => setNewTagName(e.target.value)} />
+                <Button onClick={handleCreateTag} disabled={createTagMutation.isPending}><Plus className="h-4 w-4" /></Button>
+              </div>
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                {tagsLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {tags?.map(tag => (
+                  <div key={tag.id} className="flex items-center justify-between p-3 rounded-md bg-muted/40 border">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{tag.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-end gap-1">
+                        <Switch 
+                          checked={tag.show_on_dashboard} 
+                          onCheckedChange={(checked) => updateTagMutation.mutate({ tagId: tag.id, show_on_dashboard: checked })} 
+                          className="scale-75"
+                        />
+                        <span className="text-[10px] text-muted-foreground">{tag.show_on_dashboard ? "On Dashboard" : "Hidden"}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteTagMutation.mutate(tag.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* TRADES / POSITIONS TABLE */}
         <Card>
           <CardHeader className="flex-row items-center justify-between">

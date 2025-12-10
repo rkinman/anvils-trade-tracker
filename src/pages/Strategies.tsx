@@ -421,51 +421,63 @@ export default function Strategies() {
     if (viewMode === 'list') {
       return (
         <Card 
-          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-4 border-l-4 transition-all hover:shadow-md" 
+          className="group flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-4 border-l-4 transition-all hover:shadow-md" 
           style={{ borderLeftColor: isTotalPositive ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)' }}
         >
-          {/* Info Section */}
-          <div className="flex-1 min-w-0">
-             <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-lg truncate">{strategy.name}</span>
-                {strategy.status === 'closed' && <Badge variant="secondary" className="text-xs h-5">Closed</Badge>}
+          {/* Info Section - Fixed width to allow tags to flow */}
+          <div className="w-full sm:w-[250px] shrink-0">
+             <div className="flex items-center gap-2">
+                <span className="font-semibold text-base truncate" title={strategy.name}>{strategy.name}</span>
+                {strategy.status === 'closed' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Closed</Badge>}
              </div>
-             <p className="text-sm text-muted-foreground line-clamp-1">{strategy.description || "No description"}</p>
+             <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{strategy.description || "No description"}</p>
+          </div>
+
+          {/* Tags Section - Flex grow to fill space */}
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto min-w-0 px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20">
+            {strategy.dashboard_tags?.map((tag: any) => (
+              <div key={tag.tag_id} className="flex items-center gap-1.5 px-2 py-0.5 bg-muted/40 rounded border text-xs whitespace-nowrap shrink-0">
+                 <span className="text-muted-foreground">{tag.tag_name}</span>
+                 <span className={`font-mono font-medium ${tag.total_pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {formatCurrency(tag.total_pnl)}
+                 </span>
+              </div>
+            ))}
           </div>
 
           {/* Metrics Section - Horizontal Layout */}
-          <div className="flex items-center gap-6 shrink-0 border-t pt-2 sm:border-t-0 sm:pt-0">
+          <div className="flex items-center gap-4 shrink-0 border-t pt-2 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4 bg-card z-10">
              <div className="text-right">
-                <span className="text-xs text-muted-foreground block">Net Liq</span>
-                <span className={`font-bold ${isTotalPositive ? 'text-green-500' : 'text-red-500'}`}>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">Net Liq</span>
+                <span className={`font-bold text-sm ${isTotalPositive ? 'text-green-500' : 'text-red-500'}`}>
                   {formatCurrency(strategy.total_pnl)}
                 </span>
              </div>
              
-             <div className="text-right min-w-[60px]">
-                <span className="text-xs text-muted-foreground block">ROI</span>
-                <span className={`font-medium ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+             <div className="text-right min-w-[50px]">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">ROI</span>
+                <span className={`font-medium text-sm ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                    {strategy.capital_allocation > 0 ? `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%` : '-'}
                 </span>
              </div>
 
-             <div className="text-right min-w-[80px] hidden md:block">
-                <span className="text-xs text-muted-foreground block">vs {strategy.benchmark_ticker}</span>
-                <span className={`font-medium ${roiDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+             <div className="text-right min-w-[60px] hidden md:block">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">vs {strategy.benchmark_ticker}</span>
+                <span className={`font-medium text-sm ${roiDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                    {roiDiff > 0 ? '+' : ''}{roiDiff.toFixed(1)}%
                 </span>
              </div>
 
-             <div className="text-right min-w-[60px] hidden lg:block">
-                <span className="text-xs text-muted-foreground block">Days</span>
-                <span className="font-medium">{strategy.days_in_trade}</span>
+             <div className="text-right min-w-[40px] hidden lg:block">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">Days</span>
+                <span className="font-medium text-sm">{strategy.days_in_trade}</span>
              </div>
           </div>
 
           {/* Actions Section */}
-          <div className="flex items-center gap-2 sm:border-l sm:pl-4 justify-end">
-             <Button asChild size="sm" variant="ghost">
-                <Link to={`/strategies/${strategy.id}`}>View</Link>
+          <div className="flex items-center gap-1 sm:border-l sm:pl-2 justify-end">
+             <Button asChild size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <Link to={`/strategies/${strategy.id}`}><Eye className="h-4 w-4" /></Link>
              </Button>
              <ActionsMenu />
           </div>

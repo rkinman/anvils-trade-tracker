@@ -5,7 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Plus, Trash2, TrendingUp, Eye, Target, MoreHorizontal, Archive, RefreshCw, Pencil, DollarSign, Clock, Percent, AlertCircle, BarChart3, RotateCw } from "lucide-react";
+import { Plus, Trash2, TrendingUp, Eye, Target, MoreHorizontal, Archive, RefreshCw, Pencil, DollarSign, Clock, Percent, AlertCircle, BarChart3, RotateCw, LayoutGrid, List } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +57,7 @@ export default function Strategies() {
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [formData, setFormData] = useState({ name: "", description: "", capital_allocation: "0", benchmark_ticker: "SPY" });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const queryClient = useQueryClient();
 
@@ -516,7 +517,28 @@ export default function Strategies() {
             <h2 className="text-3xl font-bold tracking-tight">Strategies</h2>
             <p className="text-muted-foreground">Manage your trading campaigns and track performance.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+             <div className="flex items-center border rounded-md bg-background p-0.5 shadow-sm mr-2">
+                <Button
+                  variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8 rounded-sm"
+                  onClick={() => setViewMode('grid')}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8 rounded-sm"
+                  onClick={() => setViewMode('list')}
+                   title="List View"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+             </div>
+
              <Button variant="outline" onClick={handleSyncBenchmarks} disabled={isSyncing}>
                 <RotateCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
                 {isSyncing ? "Syncing..." : "Sync Benchmarks"}
@@ -635,7 +657,7 @@ export default function Strategies() {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <div className={viewMode === 'grid' ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" : "grid gap-4 grid-cols-1"}>
                   {activeStrategies.map(strategy => (
                     <StrategyCard key={strategy.id} strategy={strategy} />
                   ))}
@@ -653,7 +675,7 @@ export default function Strategies() {
                     <Badge variant="outline" className="ml-2">{closedStrategies.length}</Badge>
                   </div>
                   
-                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  <div className={viewMode === 'grid' ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" : "grid gap-4 grid-cols-1"}>
                     {closedStrategies.map(strategy => (
                       <StrategyCard key={strategy.id} strategy={strategy} />
                     ))}

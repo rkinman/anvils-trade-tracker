@@ -137,14 +137,23 @@ export default function Strategies() {
           }
 
           // Helper logic for P&L calc (reused for Strategy and Tags)
+          // MUST MATCH LOGIC IN StrategyDetail.tsx
           const calculateTradePnl = (trade: any) => {
-              const amount = Number(trade.amount) || 0;
+              let amount = Number(trade.amount) || 0;
+              const actionStr = trade.action ? trade.action.toUpperCase() : '';
+              const isBuy = actionStr.includes('BUY') || actionStr.includes('LONG');
+              const isShort = actionStr.includes('SELL') || actionStr.includes('SHORT');
+              
+              // Apply sign correction for BUY orders having positive amounts (should be debit/negative)
+              if (isBuy && amount > 0) {
+                amount = -amount;
+              }
+
               if (trade.mark_price !== null && trade.mark_price !== undefined) {
                   const mark = Math.abs(Number(trade.mark_price));
                   const qty = Number(trade.quantity) || 0;
                   const mult = Number(trade.multiplier) || 1; 
-                  const actionStr = trade.action ? trade.action.toUpperCase() : '';
-                  const isShort = actionStr.includes('SELL') || actionStr.includes('SHORT');
+                  
                   const sign = isShort ? -1 : 1;
                   const marketValue = mark * qty * mult * sign;
                   return marketValue + amount; // Unrealized P&L

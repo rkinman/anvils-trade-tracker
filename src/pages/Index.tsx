@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -210,8 +210,8 @@ const Index = () => {
   const handleSaveFlow = () => flowMutation.mutate({ amount: flowAmount, type: flowType });
 
   // Calculate Chart Data & Metrics
-  const { chartData, currentNetLiq, totalPnL, pnlChangeToday, totalReturnPct } = useMemo(() => {
-    if (!netLiqLogs || netLiqLogs.length === 0) return { chartData: [], currentNetLiq: 0, totalPnL: 0, pnlChangeToday: 0, totalReturnPct: 0 };
+  const { chartData, currentNetLiq, totalPnL, pnlChangeToday, pnlChangePctToday, totalReturnPct } = useMemo(() => {
+    if (!netLiqLogs || netLiqLogs.length === 0) return { chartData: [], currentNetLiq: 0, totalPnL: 0, pnlChangeToday: 0, pnlChangePctToday: 0, totalReturnPct: 0 };
 
     // 1. Prepare base map of logs
     const logsMap = new Map(netLiqLogs.map(l => [l.date, Number(l.amount)]));
@@ -230,12 +230,20 @@ const Index = () => {
 
     // 3. Calculate Change Since Last Update
     let pnlChangeToday = 0;
+    let pnlChangePctToday = 0;
+    
     if (sortedDates.length >= 2) {
       const prevDate = sortedDates[sortedDates.length - 2];
       const prevValue = logsMap.get(prevDate) || 0;
       const flowsOnLatestDate = capitalFlows?.filter(f => f.date === latestDate).reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
+      // Calculate change in value, excluding flows on the latest date
       pnlChangeToday = (latestValue - flowsOnLatestDate) - prevValue;
+      
+      // Calculate percentage change based on previous day's value
+      if (prevValue !== 0) {
+        pnlChangePctToday = (pnlChangeToday / prevValue) * 100;
+      }
     }
 
     // 4. Build Chart Data with Benchmark
@@ -245,10 +253,9 @@ const Index = () => {
       let benchmarkValue = undefined;
 
       if (spyData && spyData.length > 0) {
-         // Use matching date or most recent previous date (for weekends/holidays)
-         // spyData is sorted ascending
-         
+         // Find SPY price on this date
          const spyPriceObj = spyData.filter((d: any) => d.date <= date).pop();
+         // Find SPY price on start date (baseline)
          const spyStartObj = spyData.filter((d: any) => d.date <= startDate).pop();
          
          if (spyPriceObj && spyStartObj && Number(spyStartObj.price) > 0) {
@@ -265,7 +272,7 @@ const Index = () => {
       };
     });
 
-    return { chartData: data, currentNetLiq: latestValue, totalPnL, pnlChangeToday, totalReturnPct };
+    return { chartData: data, currentNetLiq: latestValue, totalPnL, pnlChangeToday, pnlChangePctToday, totalReturnPct };
   }, [netLiqLogs, capitalFlows, spyData]);
 
   // Effect to auto-sync if data is missing for latest log (and showSpy is active)
@@ -351,6 +358,9 @@ const Index = () => {
                  {pnlChangeToday >= 0 ? <ArrowUpRight className="h-3 w-3 text-green-500" /> : <ArrowDownRight className="h-3 w-3 text-red-500" />}
                  <span className={pnlChangeToday >= 0 ? "text-green-500" : "text-red-500"}>
                     {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: "always" }).format(pnlChangeToday)}
+                 </span>
+                 <span className={pnlChangeToday >= 0 ? "text-green-500" : "text-red-500"}>
+                    ({pnlChangePctToday.toFixed(2)}%)
                  </span>
                  {' '}since last update
               </p>

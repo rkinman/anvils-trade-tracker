@@ -51,7 +51,8 @@ serve(async (req) => {
     const allPricesToInsert = [];
     const failedTickers: { ticker: string, reason: string }[] = [];
     const period1 = Math.floor(new Date(startDate).getTime() / 1000);
-    const period2 = Math.floor(Date.now() / 1000);
+    // Add 24 hours (86400000ms) to period2 to ensure we include today's candle if available
+    const period2 = Math.floor((Date.now() + 86400000) / 1000); 
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
 
     for (const ticker of tickers) {
@@ -84,7 +85,6 @@ serve(async (req) => {
         if (historicalData.length === 0) continue;
 
         // Note: We are storing RAW prices now, not normalized prices.
-        // This ensures consistency across multiple syncs with different start dates.
         const pricesToInsert = historicalData.map((item: { date: string; price: number }) => ({
           user_id: userId,
           date: item.date,

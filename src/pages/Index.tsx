@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -245,10 +245,11 @@ const Index = () => {
       let benchmarkValue = undefined;
 
       if (spyData && spyData.length > 0) {
-         // Find SPY price on this date
-         const spyPriceObj = spyData.find((d: any) => d.date === date);
-         // Find SPY price on start date (baseline)
-         const spyStartObj = spyData.find((d: any) => d.date === startDate);
+         // Use matching date or most recent previous date (for weekends/holidays)
+         // spyData is sorted ascending
+         
+         const spyPriceObj = spyData.filter((d: any) => d.date <= date).pop();
+         const spyStartObj = spyData.filter((d: any) => d.date <= startDate).pop();
          
          if (spyPriceObj && spyStartObj && Number(spyStartObj.price) > 0) {
             const spyStart = Number(spyStartObj.price);
@@ -266,6 +267,25 @@ const Index = () => {
 
     return { chartData: data, currentNetLiq: latestValue, totalPnL, pnlChangeToday, totalReturnPct };
   }, [netLiqLogs, capitalFlows, spyData]);
+
+  // Effect to auto-sync if data is missing for latest log (and showSpy is active)
+  useEffect(() => {
+    if (!showSpy || !netLiqLogs || netLiqLogs.length === 0 || !spyData) return;
+    
+    const latestLogDate = netLiqLogs[netLiqLogs.length - 1].date;
+    // Check if we have a relatively recent SPY price (within 4 days to account for long weekends)
+    const latestSpyDate = spyData.length > 0 ? spyData[spyData.length - 1].date : '1900-01-01';
+    
+    const logTime = new Date(latestLogDate).getTime();
+    const spyTime = new Date(latestSpyDate).getTime();
+    const diffDays = (logTime - spyTime) / (1000 * 3600 * 24);
+
+    // If gap is more than 3 days, trigger sync
+    if (diffDays > 3 && !spyLoading && !syncSpyMutation.isPending) {
+        console.log("Auto-syncing SPY data due to stale prices...");
+        syncSpyMutation.mutate();
+    }
+  }, [showSpy, netLiqLogs, spyData]);
 
   const loading = statsLoading || logsLoading || flowsLoading || spyLoading;
 

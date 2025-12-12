@@ -40,6 +40,7 @@ interface Trade {
   fees: number;
   pair_id: string | null;
   unrealized_pnl: number | null;
+  hidden: boolean;
   tags?: { id: string; name: string } | null;
 }
 
@@ -166,6 +167,7 @@ export default function StrategyDetail() {
           )
         `)
         .eq('strategy_id', strategyId!)
+        .eq('hidden', false) // Filter out hidden trades to match Strategy card calculation
         .order('date', { ascending: false });
       if (error) throw error;
       return data as Trade[];
@@ -175,7 +177,8 @@ export default function StrategyDetail() {
   const { data: unassignedTrades } = useQuery<Trade[]>({
     queryKey: ['unassignedTrades'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('trades').select('*').is('strategy_id', null).order('date', { ascending: false });
+      // Also filter hidden from unassigned to avoid confusion
+      const { data, error } = await supabase.from('trades').select('*').is('strategy_id', null).eq('hidden', false).order('date', { ascending: false });
       if (error) throw error;
       return data;
     },

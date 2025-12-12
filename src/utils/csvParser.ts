@@ -24,6 +24,7 @@ export const generateImportHash = (row: any): string => {
 // Parses tastytrade trade history symbols into a standardized format.
 // Example Input: 'SPY 12/18/26 C670' -> Output: 'SPY:2026-12-18:670.00:C'
 // Example Input: 'NVDA   241220C00140000' -> Output: 'NVDA:2024-12-20:140.00:C'
+// Example Input: './ESH6 EWF6  260130P5925' -> Output: './ESH6 EWF6:2026-01-30:5925.00:P'
 export const parseSymbolToCanonical = (symbol: string, type: string): string => {
   console.log(`🔍 Trade CSV - Parsing symbol: "${symbol}" of type: "${type}"`);
   
@@ -35,8 +36,10 @@ export const parseSymbolToCanonical = (symbol: string, type: string): string => 
   
   const trimmed = symbol.trim();
   
-  // Try to match the OCC format first (from positions CSV): UNDERLYING + SPACES + YYMMDDCPXXXXXXXX
-  const occMatch = trimmed.match(/^([A-Z]+)\s+(\d{6})([CP])(\d{8})$/);
+  // Updated regex to support complex futures symbols (characters, slashes, numbers, spaces in underlying)
+  // Matches: UNDERLYING + SPACES + YYMMDD + TYPE + STRIKE
+  const occMatch = trimmed.match(/^(.+?)\s+(\d{6})([CP])(\d+)$/);
+  
   if (occMatch) {
     try {
       const [, underlying, dateStr, callPut, strikeStr] = occMatch;
@@ -45,13 +48,19 @@ export const parseSymbolToCanonical = (symbol: string, type: string): string => 
       
       const expDate = parse(dateStr, 'yyMMdd', new Date());
       const formattedDate = format(expDate, 'yyyy-MM-dd');
-      const strike = parseFloat(strikeStr) / 1000;
+      
+      let strike = 0;
+      if (strikeStr.length === 8) {
+         strike = parseFloat(strikeStr) / 1000;
+      } else {
+         strike = parseFloat(strikeStr);
+      }
 
       const canonical = `${underlying}:${formattedDate}:${strike.toFixed(2)}:${callPut}`;
       console.log(`✅ OCC canonical: ${canonical}`);
       return canonical;
     } catch (e) {
-      console.warn(`⚠️ Could not parse OCC format: ${symbol}`);
+      console.warn(`⚠️ Could not parse OCC format: ${symbol}`, e);
     }
   }
   

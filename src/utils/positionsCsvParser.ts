@@ -31,7 +31,7 @@ const sanitizeCurrency = (value: string | undefined): number => {
 
 // Parses complex option symbols from tastytrade into a standardized, comparable format.
 // Example Input: 'NVDA   241220C00140000' -> Output: 'NVDA:2024-12-20:140.00:C'
-// Example Input: 'BOXX' -> Output: 'BOXX'
+// Example Input: './ESH6 EWF6  260130P5925' -> Output: './ESH6 EWF6:2026-01-30:5925.00:P'
 export const parseSymbolToCanonical = (symbol: string, type: string): string => {
   console.log(`🔍 Parsing symbol: "${symbol}" of type: "${type}"`);
   
@@ -43,9 +43,10 @@ export const parseSymbolToCanonical = (symbol: string, type: string): string => 
   // Handle option symbols - they can have spaces
   const trimmed = symbol.trim();
   
-  // Look for the pattern: UNDERLYING + SPACES + YYMMDDCPXXXXXXXX
-  // Where YYMMDD is date, C/P is call/put, XXXXXXXX is strike * 1000
-  const optionMatch = trimmed.match(/^([A-Z]+)\s+(\d{6})([CP])(\d{8})$/);
+  // New regex allows for characters, numbers, slashes, and spaces in the underlying part (non-greedy)
+  // Look for the pattern: (Underlying) + (Spaces) + YYMMDD(C/P)XXXXXXXX
+  // The Underlying part is anything before the date-type-strike block at the end.
+  const optionMatch = trimmed.match(/^(.+?)\s+(\d{6})([CP])(\d+)$/);
   
   if (!optionMatch) {
     console.log(`❌ Could not parse option symbol: ${symbol}`);
@@ -61,8 +62,23 @@ export const parseSymbolToCanonical = (symbol: string, type: string): string => 
     const expDate = parse(dateStr, 'yyMMdd', new Date());
     const formattedDate = format(expDate, 'yyyy-MM-dd');
     
-    // Convert strike to standard decimal format (e.g. 00140000 -> 140.00)
-    const strike = parseFloat(strikeStr) / 1000;
+    // Determine divisor for strike price based on length or standard conventions
+    // Tastytrade standard equity options usually have 8 digits implied 3 decimals? Or 1000 multiplier?
+    // Standard OCC is 8 digits, implied 3 decimal places (divide by 1000).
+    // Futures options might differ, but let's assume the string representation in CSV usually follows the same padding.
+    // However, for futures like ./ESH6 the strike 5925 might be represented differently. 
+    // In the log: 5925 matches (\d+). If it's just "5925", it's likely whole number.
+    // If it's "00592500", it's scaled.
+    
+    let strike = 0;
+    // Heuristic: If strike string is 8 chars, assume standard OCC (div 1000)
+    // If it is shorter, it might be unpadded futures strike.
+    if (strikeStr.length === 8) {
+       strike = parseFloat(strikeStr) / 1000;
+    } else {
+       // For futures like ./ESH6 ... 5925, it might just be the raw strike.
+       strike = parseFloat(strikeStr);
+    }
 
     const canonical = `${underlying}:${formattedDate}:${strike.toFixed(2)}:${callPut}`;
     console.log(`✅ Canonical symbol: ${canonical}`);

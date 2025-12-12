@@ -123,6 +123,28 @@ const Index = () => {
 
   // --- MUTATIONS ---
 
+  const syncSpyMutation = useMutation({
+    mutationFn: async () => {
+      let startDate = todayStr;
+      
+      // If we have history, sync from the beginning to update everything including today
+      if (netLiqLogs && netLiqLogs.length > 0) {
+        startDate = netLiqLogs[0].date;
+      }
+      
+      const { data, error } = await supabase.functions.invoke('fetch-benchmarks', {
+        body: { tickers: ['SPY'], startDate }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['spy-benchmark-dashboard'] });
+      showSuccess("Synced SPY data successfully");
+    },
+    onError: (err) => showError(err.message || "Failed to sync")
+  });
+
   const upsertNetLiqMutation = useMutation({
     mutationFn: async (amount: string) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -146,6 +168,9 @@ const Index = () => {
       setIsEntryOpen(false);
       setNetLiqAmount("");
       showSuccess("Net Liquidity updated for today");
+      
+      // Auto-trigger sync to get latest SPY price for today
+      syncSpyMutation.mutate();
     },
     onError: (err) => showError(err.message)
   });
@@ -179,24 +204,6 @@ const Index = () => {
     onError: (err) => showError(err.message)
   });
 
-  const syncSpyMutation = useMutation({
-    mutationFn: async () => {
-      if (!netLiqLogs || netLiqLogs.length === 0) throw new Error("No data to sync against");
-      
-      const startDate = netLiqLogs[0].date;
-      const { data, error } = await supabase.functions.invoke('fetch-benchmarks', {
-        body: { tickers: ['SPY'], startDate }
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spy-benchmark-dashboard'] });
-      showSuccess("Synced SPY data successfully");
-    },
-    onError: (err) => showError(err.message || "Failed to sync")
-  });
-
   // --- LOGIC ---
 
   const handleSaveNetLiq = () => upsertNetLiqMutation.mutate(netLiqAmount);
@@ -214,21 +221,7 @@ const Index = () => {
     const latestValue = logsMap.get(latestDate) || 0;
 
     // 2. Aggregate Flows
-    // Total Invested Capital starts as the FIRST log entry value (assuming it was the initial deposit)
-    // PLUS any subsequent flows from capital_flows table.
-    // NOTE: If the first log entry was just tracking starting at $0, then we rely on capital_flows.
-    // For simplicity: We treat the first Log Value as "Initial Capital" if no flow exists on that day.
     const initialCapital = logsMap.get(startDate) || 0;
-    
-    // Calculate total net flows (Deposits - Withdrawals)
-    const totalFlows = capitalFlows?.reduce((sum, flow) => sum + Number(flow.amount), 0) || 0;
-    
-    // Adjusted P&L = Current Value - (Initial Capital + Net Flows AFTER start date)
-    // We exclude flows on start date if we assume Initial Capital covers it, but to be safe, 
-    // let's assume Initial Capital is the snapshot. 
-    // A robust P&L is: CurrentValue - (Sum of ALL Deposits - Sum of ALL Withdrawals)
-    // BUT we don't have historical deposits for the first entry.
-    // So: Total Invested = InitialCapital + (Flows happening AFTER start date).
     const flowsAfterStart = capitalFlows?.filter(f => f.date > startDate).reduce((sum, f) => sum + Number(f.amount), 0) || 0;
     
     const totalInvested = initialCapital + flowsAfterStart;
@@ -236,15 +229,12 @@ const Index = () => {
     const totalReturnPct = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
 
     // 3. Calculate Change Since Last Update
-    // Look for previous log entry
     let pnlChangeToday = 0;
     if (sortedDates.length >= 2) {
       const prevDate = sortedDates[sortedDates.length - 2];
       const prevValue = logsMap.get(prevDate) || 0;
-      // Adjust for any flows that happened exactly on the latest date
       const flowsOnLatestDate = capitalFlows?.filter(f => f.date === latestDate).reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
-      // Change = (Today - TodayFlows) - Yesterday
       pnlChangeToday = (latestValue - flowsOnLatestDate) - prevValue;
     }
 
@@ -260,18 +250,10 @@ const Index = () => {
          // Find SPY price on start date (baseline)
          const spyStartObj = spyData.find((d: any) => d.date === startDate);
          
-         // If we have both, calculate hypothetical value
-         // Formula: PortfolioStartValue * (CurrentSPY / StartSPY)
-         // We also need to adjust for capital flows to be accurate (Time Weighted), 
-         // but for a simple visual comparison: "If I invested my starting capital in SPY"
-         // This ignores subsequent deposits for the benchmark line, which is a limitation but standard for simple charts.
          if (spyPriceObj && spyStartObj && Number(spyStartObj.price) > 0) {
             const spyStart = Number(spyStartObj.price);
-            const spyCurr = Number(spyPriceObj.price); // Note: DB stores normalized price, but ratio holds true
+            const spyCurr = Number(spyPriceObj.price); 
             benchmarkValue = initialCapital * (spyCurr / spyStart);
-            
-            // NOTE: If we want to account for deposits in the benchmark line, we'd need to loop and add (Flow * SPY_Change_Since_Flow).
-            // That's complex. Sticking to simple "Initial Capital vs SPY" comparison.
          }
       }
 

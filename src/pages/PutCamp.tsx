@@ -59,25 +59,17 @@ interface TradeGroup {
 // --- Helpers ---
 
 // Helper to parse option symbols for Strike and Expiration
-// Matches formats like: SPY 241220P500 or SPY 241220 P 500
 const parseOptionDetails = (symbol: string) => {
   try {
     const clean = symbol.trim().toUpperCase();
-    // Regex for: SYMBOL + SPACE(s) + YYMMDD + TYPE(C/P) + STRIKE
-    // Example: NVDA 241220C140
-    // We allow flexible spacing
     const match = clean.match(/^([A-Z]+)\s+(\d{6})([CP])(\d+(\.\d+)?)$/);
     
     if (match) {
-      const dateStr = match[2]; // 241220
-      const typeStr = match[3]; // C or P
-      const strikeStr = match[4]; // 140 or 00140000 (if OCC)
+      const dateStr = match[2]; 
+      const typeStr = match[3]; 
+      const strikeStr = match[4]; 
       
       const expiration = parse(dateStr, 'yyMMdd', new Date());
-      
-      // Determine strike. If > 10000 likely OCC format (implied decimals), but here likely human readable from CSV parser
-      // The csvParser usually outputs cleaned strings. Let's assume the CSV parser did its job or the user input is clean.
-      // If the strike string is massive (e.g. 00140000), treat as OCC / 1000.
       let strike = parseFloat(strikeStr);
       if (strikeStr.length === 8 && strike > 10000) strike = strike / 1000;
 
@@ -88,7 +80,6 @@ const parseOptionDetails = (symbol: string) => {
       };
     }
     
-    // Fallback for "Symbol:Date:Strike:Type" format (canonical)
     if (clean.includes(':')) {
        const parts = clean.split(':');
        if (parts.length >= 4) {
@@ -121,7 +112,7 @@ export default function PutCamp() {
         .select('*')
         .ilike('name', '%Put Camp%')
         .limit(1)
-        .maybeSingle(); // Use maybeSingle to avoid error on 0 rows
+        .maybeSingle(); 
       
       return data;
     }
@@ -170,7 +161,6 @@ export default function PutCamp() {
     const grouped: Record<string, TradeGroup> = {};
 
     trades.forEach(trade => {
-      // Group by pair_id if exists, otherwise treat as single trade ID
       const groupId = trade.pair_id || trade.id;
       
       if (!grouped[groupId]) {
@@ -196,9 +186,7 @@ export default function PutCamp() {
       grouped[groupId].trades.push(trade);
     });
 
-    // Calculate Summary for each Group
     return Object.values(grouped).map(group => {
-      // Sort trades by date
       group.trades.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
       const openDate = group.trades[0].date;
@@ -209,30 +197,24 @@ export default function PutCamp() {
       let isOpen = false;
       let initialCredit = 0;
       
-      // Parse symbol from the first trade for metrics (assume it's the main leg)
       const parsed = parseOptionDetails(group.trades[0].symbol);
       const strike = parsed?.strike || 0;
       const expiration = parsed?.expiration;
       const type = (parsed?.type || 'OTHER') as 'PUT' | 'CALL' | 'OTHER';
 
       group.trades.forEach(trade => {
-        const amount = Number(trade.amount); // Positive = Credit, Negative = Debit
+        const amount = Number(trade.amount); 
         totalAmount += amount;
         
-        // Track initial credit (sum of all positive entries near the start?)
-        // Simple heuristic: if amount > 0, add to credit
+        // Sum all positive amounts as total potential credit
         if (amount > 0) initialCredit += amount;
 
         if (trade.mark_price !== null) {
            isOpen = true;
-           // Market value for a short position is negative (liability)
            const cleanMark = Math.abs(trade.mark_price);
            const qty = trade.quantity;
            const mult = trade.multiplier;
            const actionUpper = trade.action.toUpperCase();
-           // If we sold to open, we are short.
-           // However, database just has qty. We infer direction from action or context.
-           // Usually Put Camp = Selling Puts.
            const isShort = actionUpper.includes('SELL') || actionUpper.includes('SHORT');
            const sign = isShort ? -1 : 1;
            
@@ -247,7 +229,7 @@ export default function PutCamp() {
         summary: {
           openDate,
           closeDate: isOpen ? null : lastTradeDate,
-          symbol: group.trades[0].symbol, // Use primary symbol
+          symbol: group.trades[0].symbol, 
           totalAmount,
           totalMarketValue,
           totalPnl,
@@ -280,24 +262,19 @@ export default function PutCamp() {
     const totalLosses = losses.length;
     const winRate = totalClosed > 0 ? (totalWins / totalClosed) * 100 : 0;
 
-    const runningPnl = groups.reduce((sum, g) => sum + g.summary.totalPnl, 0); // Include unrealized? Usually yes for "Running P/L"
+    const runningPnl = groups.reduce((sum, g) => sum + g.summary.totalPnl, 0); 
     const allocatedCap = Number(strategy.capital_allocation) || 0;
-    const netLiq = allocatedCap + runningPnl; // Approximate
+    const netLiq = allocatedCap + runningPnl; 
 
-    // Avg Credit (Per trade)
     const totalCredit = groups.reduce((sum, g) => sum + g.summary.initialCredit, 0);
     const avgCredit = totalTrades > 0 ? totalCredit / totalTrades : 0;
 
-    // Avg Winner / Loser
     const totalWinAmt = wins.reduce((sum, g) => sum + g.summary.totalPnl, 0);
     const totalLossAmt = losses.reduce((sum, g) => sum + g.summary.totalPnl, 0);
     const avgWinner = totalWins > 0 ? totalWinAmt / totalWins : 0;
     const avgLoser = totalLosses > 0 ? totalLossAmt / totalLosses : 0;
 
-    // Notional Value (Open positions only)
-    // NV for Put = Strike * Multiplier * Qty
     const totalNV = openGroups.reduce((sum, g) => {
-       // Assume all open legs are the short puts (simplification)
        const qty = g.trades[0]?.quantity || 0;
        const mult = g.trades[0]?.multiplier || 100;
        const strike = g.summary.strike || 0;
@@ -306,13 +283,11 @@ export default function PutCamp() {
 
     const notionalLeverage = netLiq > 0 ? totalNV / netLiq : 0;
 
-    // Averages DTE / DIT
     let totalDTE = 0;
     let dteCount = 0;
     let totalDIT = 0;
     let ditCount = 0;
 
-    // Avg DTE (Entry to Expiration)
     groups.forEach(g => {
        if (g.summary.expiration) {
           const entry = new Date(g.summary.openDate);
@@ -324,13 +299,12 @@ export default function PutCamp() {
        }
     });
 
-    // Avg DIT (Entry to Close for closed trades)
     closedGroups.forEach(g => {
        if (g.summary.closeDate) {
           const entry = new Date(g.summary.openDate);
           const close = new Date(g.summary.closeDate);
           const dit = differenceInCalendarDays(close, entry);
-          totalDIT += (dit < 1 ? 1 : dit); // Min 1 day
+          totalDIT += (dit < 1 ? 1 : dit); 
           ditCount++;
        }
     });
@@ -338,13 +312,10 @@ export default function PutCamp() {
     const avgDTE = dteCount > 0 ? totalDTE / dteCount : 0;
     const avgDIT = ditCount > 0 ? totalDIT / ditCount : 0;
 
-    // Drawdown (Simplified based on trade sequence)
-    // Construct equity curve
     let peak = 0;
     let currentEquity = 0;
     let maxDD = 0;
     
-    // Sort groups by close date to simulate curve
     const timeline = closedGroups
       .filter(g => g.summary.closeDate)
       .sort((a, b) => new Date(a.summary.closeDate!).getTime() - new Date(b.summary.closeDate!).getTime());
@@ -352,9 +323,6 @@ export default function PutCamp() {
     timeline.forEach(g => {
        currentEquity += g.summary.totalPnl;
        if (currentEquity > peak) peak = currentEquity;
-       const dd = peak > 0 ? (peak - currentEquity) / (allocatedCap + peak) : 0; // relative to total account?
-       // Let's use simple absolute DD from peak P&L
-       // If we want % DD of Net Liq:
        const accountVal = allocatedCap + currentEquity;
        const peakVal = allocatedCap + peak;
        const ddPct = peakVal > 0 ? (peakVal - accountVal) / peakVal : 0;
@@ -385,7 +353,6 @@ export default function PutCamp() {
   const handleSaveNetLiq = () => {
     const val = parseFloat(newNetLiq);
     if (isNaN(val) || !metrics) return;
-    // Formula: New Capital = Desired Net Liq - Current PnL
     const requiredCapital = val - metrics.runningPnl;
     updateCapitalMutation.mutate(requiredCapital);
   };
@@ -398,8 +365,6 @@ export default function PutCamp() {
   };
 
   const formatMoney = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-
-  // --- Render ---
 
   if (isLoading) return <DashboardLayout><Loader2 className="h-8 w-8 animate-spin mx-auto mt-20" /></DashboardLayout>;
 
@@ -428,10 +393,8 @@ export default function PutCamp() {
           <p className="text-muted-foreground">Tracking for Short Put campaigns.</p>
         </div>
 
-        {/* METRICS GRID - Mimicking the spreadsheet */}
         {metrics && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border border rounded-lg overflow-hidden shadow-sm">
-            {/* Column 1 */}
             <div className="flex flex-col gap-px">
                <MetricBox label="Total Trades" value={metrics.totalTrades} />
                <MetricBox label="Closed Trades" value={metrics.totalClosed} />
@@ -441,7 +404,6 @@ export default function PutCamp() {
                <MetricBox label="VIX" value="--" />
             </div>
             
-            {/* Column 2 */}
              <div className="flex flex-col gap-px">
                <MetricBox label="Total Wins" value={metrics.totalWins} />
                <MetricBox label="Total Losses" value={metrics.totalLosses} />
@@ -456,7 +418,6 @@ export default function PutCamp() {
                <MetricBox label="VIX3M" value="--" />
             </div>
 
-            {/* Column 3 */}
              <div className="flex flex-col gap-px">
                <MetricBox label="Avg Credit" value={formatMoney(metrics.avgCredit)} />
                <MetricBox label="Avg Winner" value={formatMoney(metrics.avgWinner)} />
@@ -466,18 +427,15 @@ export default function PutCamp() {
                <MetricBox label="VIX/VIX3M" value="--" />
             </div>
 
-            {/* Column 4 */}
              <div className="flex flex-col gap-px">
                <MetricBox label="Avg DTE" value={metrics.avgDTE.toFixed(1)} />
                <MetricBox label="Avg DIT" value={metrics.avgDIT.toFixed(1)} />
                <MetricBox label="Net LIQ DD" value={`${metrics.netLiqDD.toFixed(2)}%`} />
-               {/* Empty cells to match grid height */}
                <MetricBox label="" value="" className="flex-1 bg-muted/50" /> 
             </div>
           </div>
         )}
 
-        {/* Footer Metric */}
         {metrics && metrics.allocatedCap > 0 && (
            <div className="flex items-center gap-2 text-sm font-mono text-muted-foreground">
               <TrendingUp className="h-4 w-4" />
@@ -487,9 +445,7 @@ export default function PutCamp() {
            </div>
         )}
 
-        {/* Trades List */}
         <div className="space-y-4">
-           {/* Open Positions */}
            <Card>
               <CardHeader className="py-3 bg-muted/20">
                  <CardTitle className="text-base">Open Positions</CardTitle>
@@ -504,7 +460,6 @@ export default function PutCamp() {
               </CardContent>
            </Card>
 
-           {/* Closed Positions */}
             <Card>
               <CardHeader className="py-3 bg-muted/20">
                  <CardTitle className="text-base">Closed Trades</CardTitle>
@@ -548,8 +503,6 @@ export default function PutCamp() {
   );
 }
 
-// --- Subcomponents ---
-
 const MetricBox = ({ label, value, className, onEdit }: { label: string, value: string | number, className?: string, onEdit?: () => void }) => (
   <div 
     className={cn("bg-card p-2 flex flex-col justify-center h-[60px] relative group transition-colors", className)}
@@ -578,11 +531,18 @@ const TradeGroupTable = ({ groups, expanded, toggle, formatMoney }: any) => {
                <TableHead className="text-right">Net Credit</TableHead>
                <TableHead className="text-right">Market Val</TableHead>
                <TableHead className="text-right">P&L</TableHead>
+               <TableHead className="text-right">% Cap</TableHead>
             </TableRow>
          </TableHeader>
          <TableBody>
             {groups.map((group: TradeGroup) => {
                const isExpanded = expanded.has(group.id);
+               // Calculate % of credit captured (P&L / Max Potential Profit)
+               // Max Potential = Sum of all credits (initialCredit)
+               const pctCaptured = group.summary.initialCredit > 0 
+                  ? (group.summary.totalPnl / group.summary.initialCredit) * 100 
+                  : 0;
+
                return (
                   <>
                      <TableRow 
@@ -605,11 +565,14 @@ const TradeGroupTable = ({ groups, expanded, toggle, formatMoney }: any) => {
                         <TableCell className={cn("text-right font-bold font-mono", group.summary.totalPnl >= 0 ? "text-green-600" : "text-red-600")}>
                            {formatMoney(group.summary.totalPnl)}
                         </TableCell>
+                        <TableCell className={cn("text-right font-mono", pctCaptured >= 50 ? "text-green-600 font-bold" : "text-muted-foreground")}>
+                           {pctCaptured.toFixed(0)}%
+                        </TableCell>
                      </TableRow>
                      
                      {isExpanded && (
                         <TableRow className="bg-muted/5 hover:bg-muted/5">
-                           <TableCell colSpan={6} className="p-0">
+                           <TableCell colSpan={7} className="p-0">
                               <div className="border-y bg-background/50">
                                  <Table>
                                     <TableBody>
@@ -622,6 +585,7 @@ const TradeGroupTable = ({ groups, expanded, toggle, formatMoney }: any) => {
                                              </TableCell>
                                              <TableCell className="text-xs text-right text-muted-foreground">{formatMoney(trade.amount)}</TableCell>
                                              <TableCell className="text-xs text-right text-muted-foreground">{trade.mark_price ? formatMoney(trade.mark_price * trade.quantity * trade.multiplier * (trade.action.includes('SELL') ? -1 : 1)) : '-'}</TableCell>
+                                             <TableCell className="text-xs text-right"></TableCell>
                                              <TableCell className="text-xs text-right"></TableCell>
                                           </TableRow>
                                        ))}

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Loader2, TrendingUp, AlertCircle, ChevronDown, ChevronRight, Pencil, Link as LinkIcon } from "lucide-react";
 import { format, differenceInCalendarDays, parse } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { showSuccess, showError } from "@/utils/toast";
 
 // --- Types ---
 interface Trade {
@@ -96,7 +107,10 @@ const parseOptionDetails = (symbol: string) => {
 
 
 export default function PutCamp() {
+  const queryClient = useQueryClient();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [isEditNetLiqOpen, setIsEditNetLiqOpen] = useState(false);
+  const [newNetLiq, setNewNetLiq] = useState("");
 
   // 1. Fetch the 'Put Camp' strategy
   const { data: strategy } = useQuery({
@@ -129,6 +143,24 @@ export default function PutCamp() {
       return data as Trade[];
     },
     enabled: !!strategy?.id
+  });
+
+  const updateCapitalMutation = useMutation({
+    mutationFn: async (newCapital: number) => {
+        if (!strategy?.id) throw new Error("No strategy ID");
+        const { error } = await supabase
+            .from('strategies')
+            .update({ capital_allocation: newCapital })
+            .eq('id', strategy.id);
+        
+        if (error) throw error;
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['strategy-put-camp'] });
+        setIsEditNetLiqOpen(false);
+        showSuccess("Net Liquidity updated successfully");
+    },
+    onError: (err) => showError(err.message)
   });
 
   // 3. Process Trades into Groups (Positions)
@@ -350,6 +382,21 @@ export default function PutCamp() {
     });
   };
 
+  const handleSaveNetLiq = () => {
+    const val = parseFloat(newNetLiq);
+    if (isNaN(val) || !metrics) return;
+    // Formula: New Capital = Desired Net Liq - Current PnL
+    const requiredCapital = val - metrics.runningPnl;
+    updateCapitalMutation.mutate(requiredCapital);
+  };
+
+  const openNetLiqDialog = () => {
+    if (metrics) {
+        setNewNetLiq(metrics.netLiq.toFixed(2));
+        setIsEditNetLiqOpen(true);
+    }
+  };
+
   const formatMoney = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
   // --- Render ---
@@ -400,7 +447,12 @@ export default function PutCamp() {
                <MetricBox label="Total Losses" value={metrics.totalLosses} />
                <MetricBox label="Win Rate" value={`${metrics.winRate.toFixed(2)}%`} />
                <MetricBox label="Running P/L" value={formatMoney(metrics.runningPnl)} className={metrics.runningPnl >= 0 ? "text-green-600 dark:text-green-400 font-bold" : "text-red-600 dark:text-red-400 font-bold"} />
-               <MetricBox label="Net LIQ" value={formatMoney(metrics.netLiq)} />
+               <MetricBox 
+                  label="Net LIQ" 
+                  value={formatMoney(metrics.netLiq)} 
+                  onEdit={openNetLiqDialog}
+                  className="cursor-pointer hover:bg-muted/50"
+               />
                <MetricBox label="VIX3M" value="--" />
             </div>
 
@@ -468,16 +520,48 @@ export default function PutCamp() {
            </Card>
         </div>
       </div>
+
+      <Dialog open={isEditNetLiqOpen} onOpenChange={setIsEditNetLiqOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Net Liquidity</DialogTitle>
+            <DialogDescription>
+              Adjusting the Net Liquidity will update the strategy's Allocated Capital to match.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label>Current Net Liquidity ($)</Label>
+            <Input 
+              type="number" 
+              value={newNetLiq} 
+              onChange={(e) => setNewNetLiq(e.target.value)} 
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditNetLiqOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveNetLiq} disabled={updateCapitalMutation.isPending}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
 
 // --- Subcomponents ---
 
-const MetricBox = ({ label, value, className }: { label: string, value: string | number, className?: string }) => (
-  <div className={cn("bg-card p-2 flex flex-col justify-center h-[60px]", className)}>
+const MetricBox = ({ label, value, className, onEdit }: { label: string, value: string | number, className?: string, onEdit?: () => void }) => (
+  <div 
+    className={cn("bg-card p-2 flex flex-col justify-center h-[60px] relative group transition-colors", className)}
+    onClick={onEdit ? onEdit : undefined}
+  >
      {label && <span className="text-[10px] uppercase font-semibold text-muted-foreground">{label}</span>}
      {value !== "" && <span className="text-sm font-bold font-mono">{value}</span>}
+     {onEdit && (
+         <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Pencil className="h-3 w-3 text-muted-foreground" />
+         </div>
+     )}
   </div>
 );
 

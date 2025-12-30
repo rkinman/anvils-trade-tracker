@@ -9,7 +9,7 @@ import {
   X,
   History,
   Settings,
-  CandlestickChart,
+  Tent, // Using Tent icon for 'Camp'
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
@@ -60,6 +60,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: PieChart, label: "Strategies", path: "/strategies" },
+    { icon: Tent, label: "Put Camp", path: "/put-camp" },
     { icon: Upload, label: "Import Data", path: "/import" },
     { icon: History, label: "Trade History", path: "/history" },
     { icon: Settings, label: "Settings", path: "/settings" },

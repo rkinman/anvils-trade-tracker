@@ -12,6 +12,7 @@ import Strategies from "./pages/Strategies";
 import StrategyDetail from "./pages/StrategyDetail";
 import TradeHistory from "./pages/TradeHistory";
 import Settings from "./pages/Settings";
+import PutCamp from "./pages/PutCamp"; // Import the new page
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
 import { Loader2 } from "lucide-react";
 
@@ -79,6 +80,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <StrategyDetail />
+                  </ProtectedRoute>
+                }
+              />
+               <Route
+                path="/put-camp"
+                element={
+                  <ProtectedRoute>
+                    <PutCamp />
                   </ProtectedRoute>
                 }
               />

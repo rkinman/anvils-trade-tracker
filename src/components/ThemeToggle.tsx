@@ -1,6 +1,7 @@
 import { 
   Moon, Sun, 
-  Star, CandlestickChart, Crown, Sparkles, Gift
+  Star, CandlestickChart, Crown, Sparkles, Gift,
+  Leaf, Cloud, FileText
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -27,13 +28,14 @@ export function ThemeToggle() {
           {theme === 'luxury' && <Crown className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'legend' && <Sparkles className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'christmas' && <Gift className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'mint' && <Leaf className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'sky' && <Cloud className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'paper' && <FileText className="h-[1.2rem] w-[1.2rem]" />}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Select Theme</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        
+        <DropdownMenuLabel>Standard Themes</DropdownMenuLabel>
         <DropdownMenuItem onClick={() => setTheme("light")}>
           <Sun className="mr-2 h-4 w-4" /> Light
         </DropdownMenuItem>
@@ -42,7 +44,19 @@ export function ThemeToggle() {
         </DropdownMenuItem>
         
         <DropdownMenuSeparator />
+        <DropdownMenuLabel>Crisp Light Themes</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => setTheme("mint")}>
+          <Leaf className="mr-2 h-4 w-4" /> Mint Professional
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("sky")}>
+          <Cloud className="mr-2 h-4 w-4" /> Sky Financial
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("paper")}>
+          <FileText className="mr-2 h-4 w-4" /> Paper Minimal
+        </DropdownMenuItem>
 
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Atmospheric Themes</DropdownMenuLabel>
         <DropdownMenuItem onClick={() => setTheme("legend")}>
           <Sparkles className="mr-2 h-4 w-4" /> Legend
         </DropdownMenuItem>
@@ -54,7 +68,7 @@ export function ThemeToggle() {
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
-
+        <DropdownMenuLabel>Specialty</DropdownMenuLabel>
         <DropdownMenuItem onClick={() => setTheme("luxury")}>
           <Crown className="mr-2 h-4 w-4" /> Luxury Gold
         </DropdownMenuItem>

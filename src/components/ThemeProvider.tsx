@@ -7,7 +7,10 @@ type Theme =
   | "tasty"
   | "luxury"
   | "legend"
-  | "christmas";
+  | "christmas"
+  | "mint"
+  | "sky"
+  | "paper";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -39,9 +42,9 @@ export function ThemeProvider({
   useEffect(() => {
     const root = window.document.documentElement;
 
-    // Remove old theme classes - only need to remove the ones we support now
+    // Remove all supported theme classes
     root.classList.remove(
-      "light", "dark", "midnight", "tasty", "luxury", "legend", "christmas"
+      "light", "dark", "midnight", "tasty", "luxury", "legend", "christmas", "mint", "sky", "paper"
     );
 
     // Add new theme class

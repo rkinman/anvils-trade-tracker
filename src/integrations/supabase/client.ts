@@ -1,4 +1,3 @@
-Local Storage -> Fallback).">
 import { createClient } from '@supabase/supabase-js';
 
 // Priority: 

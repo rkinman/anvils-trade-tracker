@@ -48,26 +48,26 @@
     --ring: 212.7 26.8% 83.9%;
   }
 
-  /* Mint Professional */
+  /* Mint Professional - High Contrast Cards */
   .mint {
     --background: 160 20% 98%;
     --foreground: 160 50% 10%;
-    --card: 0 0% 100%;
+    --card: 160 20% 94%; /* Noticeably darker than background */
     --card-foreground: 160 50% 10%;
-    --popover: 0 0% 100%;
+    --popover: 160 20% 94%;
     --popover-foreground: 160 50% 10%;
     --primary: 160 84% 39%; /* Bloomberg Teal */
     --primary-foreground: 0 0% 100%;
     --secondary: 160 20% 88%;
     --secondary-foreground: 160 50% 10%;
-    --muted: 160 15% 90%;
+    --muted: 160 20% 90%;
     --muted-foreground: 160 20% 35%;
-    --accent: 160 20% 88%;
+    --accent: 160 25% 85%;
     --accent-foreground: 160 84% 39%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 160 15% 82%;
-    --input: 160 15% 82%;
+    --border: 160 20% 86%;
+    --input: 160 20% 86%;
     --ring: 160 84% 39%;
   }
 

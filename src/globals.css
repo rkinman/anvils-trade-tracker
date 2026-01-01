@@ -48,6 +48,29 @@
     --ring: 212.7 26.8% 83.9%;
   }
 
+  /* Amethyst Theme */
+  .amethyst {
+    --background: 270 50% 4%; /* Near Black with Purple tint */
+    --foreground: 270 30% 95%; /* Soft Lavender White */
+    --card: 270 40% 8%; /* Slightly lighter obsidian */
+    --card-foreground: 270 30% 95%;
+    --popover: 270 40% 8%;
+    --popover-foreground: 270 30% 95%;
+    --primary: 275 100% 70%; /* Electric Amethyst */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 270 30% 15%;
+    --secondary-foreground: 270 30% 95%;
+    --muted: 270 30% 15%;
+    --muted-foreground: 270 15% 65%;
+    --accent: 275 100% 70%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 330 80% 60%; /* Magenta/Red */
+    --destructive-foreground: 270 30% 95%;
+    --border: 270 30% 18%;
+    --input: 270 30% 18%;
+    --ring: 275 100% 70%;
+  }
+
   /* Mint Professional - High Contrast Cards */
   .mint {
     --background: 160 20% 98%;

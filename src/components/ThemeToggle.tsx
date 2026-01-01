@@ -1,7 +1,7 @@
 import { 
   Moon, Sun, 
   Star, CandlestickChart, Crown, Sparkles, Gift,
-  Leaf, Cloud, FileText
+  Leaf, Cloud, FileText, Gem
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ export function ThemeToggle() {
           {theme === 'mint' && <Leaf className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'sky' && <Cloud className="h-[1.2rem] w-[1.2rem]" />}
           {theme === 'paper' && <FileText className="h-[1.2rem] w-[1.2rem]" />}
+          {theme === 'amethyst' && <Gem className="h-[1.2rem] w-[1.2rem]" />}
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
@@ -57,6 +58,9 @@ export function ThemeToggle() {
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Atmospheric Themes</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => setTheme("amethyst")}>
+          <Gem className="mr-2 h-4 w-4" /> Amethyst Dark
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("legend")}>
           <Sparkles className="mr-2 h-4 w-4" /> Legend
         </DropdownMenuItem>

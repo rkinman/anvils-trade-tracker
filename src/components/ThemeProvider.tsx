@@ -10,7 +10,8 @@ type Theme =
   | "christmas"
   | "mint"
   | "sky"
-  | "paper";
+  | "paper"
+  | "amethyst";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -44,7 +45,7 @@ export function ThemeProvider({
 
     // Remove all supported theme classes
     root.classList.remove(
-      "light", "dark", "midnight", "tasty", "luxury", "legend", "christmas", "mint", "sky", "paper"
+      "light", "dark", "midnight", "tasty", "luxury", "legend", "christmas", "mint", "sky", "paper", "amethyst"
     );
 
     // Add new theme class

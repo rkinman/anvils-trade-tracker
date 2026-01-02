@@ -37,4 +37,4 @@ export const supabase = createClient(url, key, {
   }
 });
 
-export const isSupabaseConfigured = () => isConfigured;
+export const isSupabaseConfigured = () => isConfigured; 

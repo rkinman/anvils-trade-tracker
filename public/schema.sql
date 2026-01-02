@@ -143,4 +143,4 @@ create policy "Users can crud own benchmark prices" on public.benchmark_prices
 -- 8. INDEXES (Performance)
 create index idx_trades_user_date on public.trades(user_id, date);
 create index idx_trades_strategy on public.trades(strategy_id);
-create index idx_net_liq_user_date on public.net_liquidity_logs(user_id, date);
+create index idx_net_liq_user_date on public.net_liquidity_logs(user_id, date); 

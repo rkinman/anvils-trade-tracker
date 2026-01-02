@@ -1167,4 +1167,4 @@ export default function StrategyDetail() {
       </div>
     </DashboardLayout>
   );
-}
+} 

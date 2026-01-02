@@ -17,4 +17,4 @@ export function FloatingActionBar({ children, isOpen }: FloatingActionBarProps) 
     </div>,
     document.body
   );
-}
+} 

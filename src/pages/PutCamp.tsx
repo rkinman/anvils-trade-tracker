@@ -619,4 +619,4 @@ const TradeGroupTable = ({ groups, expanded, toggle, formatMoney }: any) => {
          </TableBody>
       </Table>
    );
-}
+} 

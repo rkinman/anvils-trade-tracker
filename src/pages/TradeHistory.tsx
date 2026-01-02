@@ -27,14 +27,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuGroup, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
@@ -48,8 +48,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { FloatingActionBar } from "@/components/FloatingActionBar";
 
-// Custom Fragment wrapper to swallow extra props like data-dyad-id
-const TradeGroupWrapper = ({ children, ...props }: { children: React.ReactNode; [key: string]: any }) => {
+// Custom Fragment wrapper to swallow extra props
+const TradeGroupWrapper = ({ children, ...props }: { children: React.ReactNode;[key: string]: any }) => {
   return <>{children}</>;
 };
 
@@ -119,8 +119,8 @@ const SortableTableHead: React.FC<SortableTableHeadProps> = ({
 
 // Helper function for currency formatting
 const formatCurrency = (value: number, decimals: number = 2) => {
-  return new Intl.NumberFormat('en-US', { 
-    style: 'currency', 
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
     currency: 'USD',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -151,7 +151,7 @@ export default function TradeHistory() {
           )
         `)
         .order('date', { ascending: false });
-      
+
       if (error) throw error;
       return data as Trade[];
     }
@@ -282,12 +282,12 @@ export default function TradeHistory() {
 
   const handleSelectPair = (pairTradeIds: string[], checked: boolean) => {
     setSelectedTrades(prev => {
-        const pairIdsSet = new Set(pairTradeIds);
-        if (checked) {
-            return Array.from(new Set([...prev, ...pairTradeIds]));
-        } else {
-            return prev.filter(id => !pairIdsSet.has(id));
-        }
+      const pairIdsSet = new Set(pairTradeIds);
+      if (checked) {
+        return Array.from(new Set([...prev, ...pairTradeIds]));
+      } else {
+        return prev.filter(id => !pairIdsSet.has(id));
+      }
     });
   };
 
@@ -308,7 +308,7 @@ export default function TradeHistory() {
   const handleBulkHide = () => updateHiddenStatusMutation.mutate({ ids: selectedTrades, hidden: true });
   const handleBulkUnhide = () => updateHiddenStatusMutation.mutate({ ids: selectedTrades, hidden: false });
   const handleConfirmDelete = () => deleteTradesMutation.mutate(tradesToDelete);
-  
+
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -319,10 +319,10 @@ export default function TradeHistory() {
   };
 
   // --- Memoized Data ---
-  const filteredTrades = useMemo(() => 
+  const filteredTrades = useMemo(() =>
     trades?.filter(trade => {
       const matchesSearch = trade.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            trade.action.toLowerCase().includes(searchTerm.toLowerCase());
+        trade.action.toLowerCase().includes(searchTerm.toLowerCase());
       const isVisible = showHidden ? true : !trade.hidden;
       return matchesSearch && isVisible;
     }), [trades, searchTerm, showHidden]);
@@ -340,7 +340,7 @@ export default function TradeHistory() {
         aValue = a.strategies?.name || '';
         bValue = b.strategies?.name || '';
       }
-      
+
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
@@ -461,15 +461,15 @@ export default function TradeHistory() {
                               onCheckedChange={(checked) => handleSelectAllInGroup(group.trades.map(t => t.id), !!checked)}
                             />
                           </TableHead>
-                          <SortableTableHead sortKey="date" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Date</SortableTableHead>
-                          <SortableTableHead sortKey="symbol" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Symbol</SortableTableHead>
-                          <SortableTableHead sortKey="action" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Action</SortableTableHead>
+                          <SortableTableHead sortKey="date" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }}>Date</SortableTableHead>
+                          <SortableTableHead sortKey="symbol" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }}>Symbol</SortableTableHead>
+                          <SortableTableHead sortKey="action" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }}>Action</SortableTableHead>
                           <TableHead>Status</TableHead>
-                          <SortableTableHead sortKey="quantity" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Qty</SortableTableHead>
-                          <SortableTableHead sortKey="price" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Price</SortableTableHead>
-                          <SortableTableHead sortKey="amount" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}} className="text-right">Amount</SortableTableHead>
-                          <SortableTableHead sortKey="strategy_name" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Strategy</SortableTableHead>
-                          <SortableTableHead sortKey="pair_id" {...{currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort}}>Pair ID</SortableTableHead>
+                          <SortableTableHead sortKey="quantity" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }} className="text-right">Qty</SortableTableHead>
+                          <SortableTableHead sortKey="price" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }} className="text-right">Price</SortableTableHead>
+                          <SortableTableHead sortKey="amount" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }} className="text-right">Amount</SortableTableHead>
+                          <SortableTableHead sortKey="strategy_name" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }}>Strategy</SortableTableHead>
+                          <SortableTableHead sortKey="pair_id" {...{ currentSortKey: sortKey, currentSortDirection: sortDirection, onSort: handleSort }}>Pair ID</SortableTableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -634,4 +634,4 @@ export default function TradeHistory() {
       </FloatingActionBar>
     </DashboardLayout>
   );
-}
+} 

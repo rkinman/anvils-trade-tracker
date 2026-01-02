@@ -16,7 +16,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { MadeWithDyad } from "./made-with-dyad";
+
 import { useQuery } from "@tanstack/react-query";
 
 interface DashboardLayoutProps {
@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         .select('app_title')
         .eq('id', user.id)
         .single();
-      
+
       return data;
     },
     staleTime: 1000 * 60 * 5 // Cache for 5 minutes
@@ -70,7 +70,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-background text-foreground flex transition-colors duration-300">
       {/* Mobile Sidebar Overlay */}
       {isMobile && sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40"
           onClick={() => setSidebarOpen(false)}
         />
@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <LogOut className="h-5 w-5" />
               Sign Out
             </Button>
-            <MadeWithDyad />
+
           </div>
         </div>
       </aside>
@@ -156,4 +156,4 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
     </div>
   );
-}
+} 

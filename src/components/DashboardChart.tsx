@@ -124,4 +124,4 @@ export function DashboardChart({ data, showBenchmark }: DashboardChartProps) {
       </ResponsiveContainer>
     </div>
   );
-}
+} 

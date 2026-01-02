@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = 
-  | "dark" 
-  | "light" 
+type Theme =
+  | "dark"
+  | "light"
   | "midnight"
   | "tasty"
   | "luxury"
@@ -34,7 +34,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 export function ThemeProvider({
   children,
   defaultTheme = "dark",
-  storageKey = "dyad-ui-theme",
+  storageKey = "trade-tracker-theme",
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
@@ -50,7 +50,7 @@ export function ThemeProvider({
 
     // Add new theme class
     root.classList.add(theme);
-    
+
     // Also handle the data-theme attribute for CSS variable switching
     root.setAttribute("data-theme", theme);
 
@@ -83,4 +83,4 @@ export const useTheme = () => {
     throw new Error("useTheme must be used within a ThemeProvider");
 
   return context;
-};
+}; 

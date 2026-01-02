@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
 import {
@@ -59,7 +60,7 @@ export default function Strategies() {
   const [formData, setFormData] = useState({ name: "", description: "", capital_allocation: "0", benchmark_ticker: "SPY" });
   const [isSyncing, setIsSyncing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
+
   const queryClient = useQueryClient();
 
   // Fetch strategies with robust error handling
@@ -71,7 +72,7 @@ export default function Strategies() {
         const { data: strategiesData, error: stratError } = await supabase
           .from('strategies')
           .select('*');
-        
+
         if (stratError) throw stratError;
 
         if (!strategiesData || strategiesData.length === 0) {
@@ -82,7 +83,7 @@ export default function Strategies() {
         const { data: tradesData, error: tradesError } = await supabase
           .from('trades')
           .select('id, strategy_id, amount, date, mark_price, quantity, multiplier, action, hidden, tag_id');
-        
+
         if (tradesError) console.error(tradesError);
 
         const safeTrades = tradesData || [];
@@ -93,7 +94,7 @@ export default function Strategies() {
           const { data, error } = await supabase
             .from('tags')
             .select('*');
-          
+
           if (!error && data) tagsData = data;
         } catch (err) {
           console.warn("Could not fetch tags", err);
@@ -107,7 +108,7 @@ export default function Strategies() {
         // 5. Calculate Metrics per Strategy
         const calculatedStrategies = strategiesData.map(strategy => {
           const stratTrades = safeTrades.filter(t => t.strategy_id === strategy.id && !t.hidden);
-          
+
           let total_pnl = 0;
           let realized_pnl = 0;
           let unrealized_pnl = 0;
@@ -119,60 +120,60 @@ export default function Strategies() {
 
           // Calculate Days in Trade & Dates
           if (stratTrades.length > 0) {
-              const dates = stratTrades
-                .map(t => t.date ? new Date(t.date).getTime() : NaN)
-                .filter(d => !isNaN(d));
-              
-              if (dates.length > 0) {
-                const minDate = Math.min(...dates);
-                first_trade_date = new Date(minDate).toISOString().split('T')[0];
-                const maxDate = Math.max(...dates);
-                last_trade_date = new Date(maxDate).toISOString().split('T')[0];
+            const dates = stratTrades
+              .map(t => t.date ? new Date(t.date).getTime() : NaN)
+              .filter(d => !isNaN(d));
 
-                const endDate = strategy.status === 'closed' ? maxDate : Date.now();
-                const diffTime = Math.max(0, endDate - minDate);
-                days_in_trade = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (days_in_trade === 0) days_in_trade = 1;
-              }
+            if (dates.length > 0) {
+              const minDate = Math.min(...dates);
+              first_trade_date = new Date(minDate).toISOString().split('T')[0];
+              const maxDate = Math.max(...dates);
+              last_trade_date = new Date(maxDate).toISOString().split('T')[0];
+
+              const endDate = strategy.status === 'closed' ? maxDate : Date.now();
+              const diffTime = Math.max(0, endDate - minDate);
+              days_in_trade = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              if (days_in_trade === 0) days_in_trade = 1;
+            }
           }
 
           // Helper logic for P&L calc (reused for Strategy and Tags)
           // MUST MATCH LOGIC IN StrategyDetail.tsx
           const calculateTradePnl = (trade: any) => {
-              let amount = Number(trade.amount) || 0;
-              const actionStr = trade.action ? trade.action.toUpperCase() : '';
-              const isBuy = actionStr.includes('BUY') || actionStr.includes('LONG');
-              const isShort = actionStr.includes('SELL') || actionStr.includes('SHORT');
-              
-              // Apply sign correction for BUY orders having positive amounts (should be debit/negative)
-              if (isBuy && amount > 0) {
-                amount = -amount;
-              }
+            let amount = Number(trade.amount) || 0;
+            const actionStr = trade.action ? trade.action.toUpperCase() : '';
+            const isBuy = actionStr.includes('BUY') || actionStr.includes('LONG');
+            const isShort = actionStr.includes('SELL') || actionStr.includes('SHORT');
 
-              if (trade.mark_price !== null && trade.mark_price !== undefined) {
-                  const mark = Math.abs(Number(trade.mark_price));
-                  const qty = Number(trade.quantity) || 0;
-                  const mult = Number(trade.multiplier) || 1; 
-                  
-                  const sign = isShort ? -1 : 1;
-                  const marketValue = mark * qty * mult * sign;
-                  return marketValue + amount; // Unrealized P&L
-              } else {
-                  return amount; // Realized P&L
-              }
+            // Apply sign correction for BUY orders having positive amounts (should be debit/negative)
+            if (isBuy && amount > 0) {
+              amount = -amount;
+            }
+
+            if (trade.mark_price !== null && trade.mark_price !== undefined) {
+              const mark = Math.abs(Number(trade.mark_price));
+              const qty = Number(trade.quantity) || 0;
+              const mult = Number(trade.multiplier) || 1;
+
+              const sign = isShort ? -1 : 1;
+              const marketValue = mark * qty * mult * sign;
+              return marketValue + amount; // Unrealized P&L
+            } else {
+              return amount; // Realized P&L
+            }
           };
 
           stratTrades.forEach(trade => {
-              const pnl = calculateTradePnl(trade);
-              const isUnrealized = trade.mark_price !== null && trade.mark_price !== undefined;
-              
-              if (isUnrealized) {
-                  unrealized_pnl += pnl;
-              } else {
-                  realized_pnl += pnl;
-                  if (pnl > 0) win_count++;
-                  if (pnl < 0) loss_count++;
-              }
+            const pnl = calculateTradePnl(trade);
+            const isUnrealized = trade.mark_price !== null && trade.mark_price !== undefined;
+
+            if (isUnrealized) {
+              unrealized_pnl += pnl;
+            } else {
+              realized_pnl += pnl;
+              if (pnl > 0) win_count++;
+              if (pnl < 0) loss_count++;
+            }
           });
 
           total_pnl = realized_pnl + unrealized_pnl;
@@ -180,45 +181,45 @@ export default function Strategies() {
           // Calculate Tag Performance Client-Side
           const stratTags = tagsData.filter(t => t.strategy_id === strategy.id);
           const dashboard_tags = stratTags.map(tag => {
-             const tagTrades = stratTrades.filter(t => t.tag_id === tag.id);
-             let tagTotalPnl = 0;
-             tagTrades.forEach(t => {
-                 tagTotalPnl += calculateTradePnl(t);
-             });
-             return {
-                 tag_id: tag.id,
-                 tag_name: tag.name,
-                 total_pnl: tagTotalPnl,
-                 show_on_dashboard: tag.show_on_dashboard
-             };
+            const tagTrades = stratTrades.filter(t => t.tag_id === tag.id);
+            let tagTotalPnl = 0;
+            tagTrades.forEach(t => {
+              tagTotalPnl += calculateTradePnl(t);
+            });
+            return {
+              tag_id: tag.id,
+              tag_name: tag.name,
+              total_pnl: tagTotalPnl,
+              show_on_dashboard: tag.show_on_dashboard
+            };
           }).filter(t => t.show_on_dashboard);
 
 
           // Calculate Benchmark Performance
           let benchmarkPerformance = 0;
           const ticker = strategy.benchmark_ticker || 'SPY';
-          
+
           if (first_trade_date && benchmarkData) {
             // Since data in DB is normalized to 100 at the fetch date, we need to compare two points
             // Find price closest to first_trade_date
             const stratPrices = benchmarkData
               .filter((b: any) => b.ticker === ticker)
               .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            
+
             if (stratPrices.length > 0) {
               // Find entry price (closest date >= first_trade_date)
               // Since it's sorted, find first
               const startPriceObj = stratPrices.find((p: any) => p.date >= first_trade_date);
-              
+
               // Find end price (closest date <= today or last_trade_date if closed)
               const endDateToCheck = strategy.status === 'closed' ? last_trade_date : new Date().toISOString().split('T')[0];
               // Reverse find for end price
               const endPriceObj = [...stratPrices].reverse().find((p: any) => p.date <= endDateToCheck);
 
               if (startPriceObj && endPriceObj && Number(startPriceObj.price) > 0) {
-                 const startP = Number(startPriceObj.price);
-                 const endP = Number(endPriceObj.price);
-                 benchmarkPerformance = ((endP - startP) / startP) * 100;
+                const startP = Number(startPriceObj.price);
+                const endP = Number(endPriceObj.price);
+                benchmarkPerformance = ((endP - startP) / startP) * 100;
               }
             }
           }
@@ -259,7 +260,7 @@ export default function Strategies() {
     mutationFn: async (data: typeof formData) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
-      
+
       const { error } = await supabase.from('strategies').insert({
         name: data.name,
         description: data.description,
@@ -308,7 +309,10 @@ export default function Strategies() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => supabase.from('strategies').delete().eq('id', id),
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('strategies').delete().eq('id', id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['strategies-calculated'] });
       showSuccess("Strategy deleted");
@@ -358,7 +362,7 @@ export default function Strategies() {
       const minDateMs = Math.min(...validDates);
       // Go back a few days just in case to capture market opens
       const startDate = new Date(minDateMs - 86400000 * 3).toISOString().split('T')[0];
-      
+
       const tickers = Array.from(new Set(strategies.map(s => s.benchmark_ticker || 'SPY')));
 
       const { data, error } = await supabase.functions.invoke('fetch-benchmarks', {
@@ -377,8 +381,8 @@ export default function Strategies() {
     }
   };
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { 
-    style: 'currency', 
+  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', {
+    style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -386,10 +390,10 @@ export default function Strategies() {
 
   const StrategyCard = ({ strategy, viewMode }: { strategy: Strategy, viewMode: 'grid' | 'list' }) => {
     const isTotalPositive = strategy.total_pnl >= 0;
-    const roi = strategy.capital_allocation > 0 
-      ? (strategy.total_pnl / strategy.capital_allocation) * 100 
+    const roi = strategy.capital_allocation > 0
+      ? (strategy.total_pnl / strategy.capital_allocation) * 100
       : 0;
-    
+
     const benchmarkRoi = strategy.benchmark_performance || 0;
 
     // Actions dropdown menu reused in both views
@@ -417,8 +421,8 @@ export default function Strategies() {
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { 
-            if(confirm('Delete this strategy? This action cannot be undone.')) deleteMutation.mutate(strategy.id) 
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => {
+            if (confirm('Delete this strategy? This action cannot be undone.')) deleteMutation.mutate(strategy.id)
           }}>
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </DropdownMenuItem>
@@ -428,66 +432,66 @@ export default function Strategies() {
 
     if (viewMode === 'list') {
       return (
-        <Card 
-          className="group flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-4 border-l-4 transition-all hover:shadow-md" 
+        <Card
+          className="group flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-4 border-l-4 transition-all hover:shadow-md"
           style={{ borderLeftColor: isTotalPositive ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)' }}
         >
           {/* Info Section - Fixed width to allow tags to flow */}
           <div className="w-full sm:w-[250px] shrink-0">
-             <div className="flex items-center gap-2">
-                <span className="font-semibold text-base truncate" title={strategy.name}>{strategy.name}</span>
-                {strategy.status === 'closed' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Closed</Badge>}
-             </div>
-             <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{strategy.description || "No description"}</p>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-base truncate" title={strategy.name}>{strategy.name}</span>
+              {strategy.status === 'closed' && <Badge variant="secondary" className="text-[10px] h-4 px-1">Closed</Badge>}
+            </div>
+            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{strategy.description || "No description"}</p>
           </div>
 
           {/* Tags Section - Flex grow to fill space */}
           <div className="flex-1 flex items-center gap-2 overflow-x-auto min-w-0 px-2 scrollbar-thin scrollbar-thumb-muted-foreground/20">
             {strategy.dashboard_tags?.map((tag: any) => (
               <div key={tag.tag_id} className="flex items-center gap-1.5 px-2 py-0.5 bg-muted/40 rounded border text-xs whitespace-nowrap shrink-0">
-                 <span className="text-muted-foreground">{tag.tag_name}</span>
-                 <span className={`font-mono font-medium ${tag.total_pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {formatCurrency(tag.total_pnl)}
-                 </span>
+                <span className="text-muted-foreground">{tag.tag_name}</span>
+                <span className={`font-mono font-medium ${tag.total_pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {formatCurrency(tag.total_pnl)}
+                </span>
               </div>
             ))}
           </div>
 
           {/* Metrics Section - Horizontal Layout */}
           <div className="flex items-center gap-4 shrink-0 border-t pt-2 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4 bg-card z-10">
-             <div className="text-right">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">Net Liq</span>
-                <span className={`font-bold text-sm ${isTotalPositive ? 'text-green-500' : 'text-red-500'}`}>
-                  {formatCurrency(strategy.total_pnl)}
-                </span>
-             </div>
-             
-             <div className="text-right min-w-[50px]">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">ROI</span>
-                <span className={`font-medium text-sm ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                   {strategy.capital_allocation > 0 ? `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%` : '-'}
-                </span>
-             </div>
+            <div className="text-right">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">Net Liq</span>
+              <span className={`font-bold text-sm ${isTotalPositive ? 'text-green-500' : 'text-red-500'}`}>
+                {formatCurrency(strategy.total_pnl)}
+              </span>
+            </div>
 
-             <div className="text-right min-w-[60px] hidden md:block">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">{strategy.benchmark_ticker}</span>
-                <span className={`font-medium text-sm ${benchmarkRoi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                   {benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(1)}%
-                </span>
-             </div>
+            <div className="text-right min-w-[50px]">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">ROI</span>
+              <span className={`font-medium text-sm ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {strategy.capital_allocation > 0 ? `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%` : '-'}
+              </span>
+            </div>
 
-             <div className="text-right min-w-[40px] hidden lg:block">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">Days</span>
-                <span className="font-medium text-sm">{strategy.days_in_trade}</span>
-             </div>
+            <div className="text-right min-w-[60px] hidden md:block">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">{strategy.benchmark_ticker}</span>
+              <span className={`font-medium text-sm ${benchmarkRoi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className="text-right min-w-[40px] hidden lg:block">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">Days</span>
+              <span className="font-medium text-sm">{strategy.days_in_trade}</span>
+            </div>
           </div>
 
           {/* Actions Section */}
           <div className="flex items-center gap-1 sm:border-l sm:pl-2 justify-end">
-             <Button asChild size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                <Link to={`/strategies/${strategy.id}`}><Eye className="h-4 w-4" /></Link>
-             </Button>
-             <ActionsMenu />
+            <Button asChild size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+              <Link to={`/strategies/${strategy.id}`}><Eye className="h-4 w-4" /></Link>
+            </Button>
+            <ActionsMenu />
           </div>
         </Card>
       );
@@ -511,7 +515,7 @@ export default function Strategies() {
             <ActionsMenu />
           </div>
         </CardHeader>
-        
+
         <CardContent className="flex-1 pb-4 space-y-4">
           <div className="bg-gradient-to-br from-muted/50 to-muted/20 rounded-lg p-4">
             <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
@@ -535,13 +539,13 @@ export default function Strategies() {
                 {strategy.capital_allocation > 0 ? `${roi > 0 ? '+' : ''}${roi.toFixed(2)}%` : 'N/A'}
               </span>
             </div>
-             <div className="bg-muted/30 p-3 rounded-md">
+            <div className="bg-muted/30 p-3 rounded-md">
               <span className="text-muted-foreground block text-sm mb-1 flex items-center gap-1">
                 <BarChart3 className="h-4 w-4" />
                 {strategy.benchmark_ticker}
               </span>
               <span className={`text-lg font-bold ${benchmarkRoi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                   {benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(2)}%
+                {benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(2)}%
               </span>
             </div>
             <div className="bg-muted/30 p-3 rounded-md">
@@ -573,7 +577,7 @@ export default function Strategies() {
             </div>
           )}
         </CardContent>
-        
+
         <CardFooter className="pt-0">
           <Button asChild variant="outline" className="w-full">
             <Link to={`/strategies/${strategy.id}`}>
@@ -594,31 +598,31 @@ export default function Strategies() {
             <p className="text-muted-foreground">Manage your trading campaigns and track performance.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-             <div className="flex items-center border rounded-md bg-background p-0.5 shadow-sm mr-2">
-                <Button
-                  variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 rounded-sm"
-                  onClick={() => setViewMode('grid')}
-                  title="Grid View"
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 rounded-sm"
-                  onClick={() => setViewMode('list')}
-                   title="List View"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-             </div>
-
-             <Button variant="outline" onClick={handleSyncBenchmarks} disabled={isSyncing}>
-                <RotateCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? "Syncing..." : "Sync Benchmarks"}
+            <div className="flex items-center border rounded-md bg-background p-0.5 shadow-sm mr-2">
+              <Button
+                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8 rounded-sm"
+                onClick={() => setViewMode('grid')}
+                title="Grid View"
+              >
+                <LayoutGrid className="h-4 w-4" />
               </Button>
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8 rounded-sm"
+                onClick={() => setViewMode('list')}
+                title="List View"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Button variant="outline" onClick={handleSyncBenchmarks} disabled={isSyncing}>
+              <RotateCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? "Syncing..." : "Sync Benchmarks"}
+            </Button>
             <Button onClick={() => { setFormData({ name: "", description: "", capital_allocation: "0", benchmark_ticker: "SPY" }); setIsCreateOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" /> New Strategy
             </Button>
@@ -629,25 +633,28 @@ export default function Strategies() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Strategy</DialogTitle>
+              <DialogDescription>
+                Define a new trading strategy to track its performance and benchmark against the market.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label htmlFor="name">Strategy Name *</Label>
-                <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="e.g., TSLA Wheel Strategy" />
+                <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., TSLA Wheel Strategy" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2">
+                <div className="space-y-2">
                   <Label htmlFor="cap">Allocated Capital ($)</Label>
-                  <Input id="cap" type="number" value={formData.capital_allocation} onChange={(e) => setFormData({...formData, capital_allocation: e.target.value})} placeholder="10000" />
+                  <Input id="cap" type="number" value={formData.capital_allocation} onChange={(e) => setFormData({ ...formData, capital_allocation: e.target.value })} placeholder="10000" />
                 </div>
-                 <div className="space-y-2">
+                <div className="space-y-2">
                   <Label htmlFor="benchmark">Benchmark Ticker</Label>
-                  <Input id="benchmark" value={formData.benchmark_ticker} onChange={(e) => setFormData({...formData, benchmark_ticker: e.target.value.toUpperCase()})} placeholder="SPY" />
+                  <Input id="benchmark" value={formData.benchmark_ticker} onChange={(e) => setFormData({ ...formData, benchmark_ticker: e.target.value.toUpperCase() })} placeholder="SPY" />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="desc">Description</Label>
-                <Textarea id="desc" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="Describe your strategy..." />
+                <Textarea id="desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Describe your strategy..." />
               </div>
             </div>
             <DialogFooter>
@@ -663,25 +670,28 @@ export default function Strategies() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Strategy</DialogTitle>
+              <DialogDescription>
+                Update the details, capital allocation, or benchmark for this strategy.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Strategy Name</Label>
-                <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
-               <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-cap">Allocated Capital ($)</Label>
-                  <Input id="edit-cap" type="number" value={formData.capital_allocation} onChange={(e) => setFormData({...formData, capital_allocation: e.target.value})} />
+                  <Input id="edit-cap" type="number" value={formData.capital_allocation} onChange={(e) => setFormData({ ...formData, capital_allocation: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-benchmark">Benchmark Ticker</Label>
-                  <Input id="edit-benchmark" value={formData.benchmark_ticker} onChange={(e) => setFormData({...formData, benchmark_ticker: e.target.value.toUpperCase()})} />
+                  <Input id="edit-benchmark" value={formData.benchmark_ticker} onChange={(e) => setFormData({ ...formData, benchmark_ticker: e.target.value.toUpperCase() })} />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-desc">Description</Label>
-                <Textarea id="edit-desc" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                <Textarea id="edit-desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
               </div>
             </div>
             <DialogFooter>
@@ -695,11 +705,11 @@ export default function Strategies() {
 
         {strategiesError && (
           <div className="p-4 border border-destructive/50 rounded-lg bg-destructive/10 text-destructive flex items-center gap-3">
-             <AlertCircle className="h-5 w-5" />
-             <div>
-               <h3 className="font-semibold">Error Loading Strategies</h3>
-               <p className="text-sm">Please refresh the page. If this persists, there may be a database connection issue.</p>
-             </div>
+            <AlertCircle className="h-5 w-5" />
+            <div>
+              <h3 className="font-semibold">Error Loading Strategies</h3>
+              <p className="text-sm">Please refresh the page. If this persists, there may be a database connection issue.</p>
+            </div>
           </div>
         )}
 
@@ -718,7 +728,7 @@ export default function Strategies() {
                 <h3 className="text-xl font-semibold">Active Strategies</h3>
                 <Badge variant="outline" className="ml-2">{activeStrategies.length}</Badge>
               </div>
-              
+
               {activeStrategies.length === 0 ? (
                 <div className="text-center py-16 border border-dashed rounded-lg bg-muted/5">
                   <div className="max-w-md mx-auto space-y-3">
@@ -750,7 +760,7 @@ export default function Strategies() {
                     <h3 className="text-xl font-semibold text-muted-foreground">Closed Strategies</h3>
                     <Badge variant="outline" className="ml-2">{closedStrategies.length}</Badge>
                   </div>
-                  
+
                   <div className={viewMode === 'grid' ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" : "grid gap-4 grid-cols-1"}>
                     {closedStrategies.map(strategy => (
                       <StrategyCard key={strategy.id} strategy={strategy} viewMode={viewMode} />
@@ -764,6 +774,6 @@ export default function Strategies() {
       </div>
     </DashboardLayout>
   );
-} 
+}
 
 

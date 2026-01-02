@@ -266,6 +266,20 @@ export default function Setup() {
                       </div>
                     </div>
                   </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</div>
+                    <div className="space-y-2 flex-1">
+                      <p className="text-sm font-medium">Configure Settings (Important)</p>
+                      <p className="text-xs text-muted-foreground">
+                        In the function <strong>Settings</strong> tab:
+                      </p>
+                      <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1 mt-1">
+                        <li><strong>Disable</strong> the "Enforce JWT" toggle (we handle auth in code).</li>
+                        <li>Go to <strong>Secrets</strong> and add <code className="text-primary">SUPABASE_SERVICE_ROLE_KEY</code>.</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

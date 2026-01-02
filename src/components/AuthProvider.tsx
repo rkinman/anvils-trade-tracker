@@ -14,9 +14,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Check active sessions and sets the user
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setLoading(false);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Auth error:", error);
+          // If 400/network error, session is null
+        }
+        setSession(session);
+      } catch (error) {
+        console.error("Session check failed:", error);
+        setSession(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
     getSession();
@@ -38,6 +48,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   return useContext(AuthContext);
-}; 
+};
 
 
